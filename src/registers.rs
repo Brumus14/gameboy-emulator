@@ -17,6 +17,21 @@ pub struct Registers {
 }
 
 impl Registers {
+    pub fn new() -> Self {
+        Self {
+            a: 0,
+            f: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+            h: 0,
+            l: 0,
+            sp: 0,
+            pc: 0,
+        }
+    }
+
     pub fn bc(&self) -> u16 {
         ((self.b as u16) << 8) | self.c as u16
     }

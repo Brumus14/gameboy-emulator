@@ -1,14 +1,24 @@
-use crate::registers::Registers;
+use crate::{memory::Memory, registers::Registers};
 
-pub struct CPU {
+pub struct Cpu {
     registers: Registers,
 }
 
-impl CPU {
-    pub fn decode_instruction() {}
+impl Cpu {
+    pub fn new() -> Self {
+        Self {
+            registers: Registers::new(),
+        }
+    }
+
+    pub fn decode_instruction(&self, memory: &Memory) -> Instruction {
+        let opcode = memory.read(self.registers.pc);
+        Instruction::Nop
+    }
 }
 
-enum Instruction {
+#[derive(Debug)]
+pub enum Instruction {
     Nop,
     LD16,
 }

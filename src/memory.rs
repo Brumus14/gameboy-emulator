@@ -1,4 +1,4 @@
-type Address = u16;
+pub type Address = u16;
 
 #[derive(Debug)]
 enum Region {
@@ -39,11 +39,11 @@ impl Memory {
             0x0000..0x4000 => !todo!("rom bank 00"),
             0x4000..0x8000 => !todo!("rom bank NN"),
             0x8000..0xA000 => Region::VideoMemory(address - 0x8000),
-            0xA000..0xC000 => !todo!("external ram"),
+            0xA000..0xC000 => Region::ExternalMemory(address - 0xA000),
             0xC000..0xE000 => Region::WorkMemory(address - 0xC000),
             0xE000..0xFE00 => Region::EchoArea(address - 0xE000),
             0xFE00..0xFEA0 => Region::ObjectAttributeMemory(address - 0xFE00),
-            0xFEA0..0xFF00 => !todo!("unusable memory"),
+            0xFEA0..0xFF00 => Region::Unused,
             0xFF00..0xFF80 => !todo!("i/o registers"),
             0xFF80..0xFFFF => Region::HighMemory(address - 0xFF80),
             0xFFFF => Region::InterruptEnableRegister,
