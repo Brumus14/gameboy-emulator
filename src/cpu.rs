@@ -11,14 +11,7 @@ impl Cpu {
         }
     }
 
-    pub fn decode_instruction(&self, memory: &Memory) -> Instruction {
+    pub fn execute(&self, memory: &Memory) {
         let opcode = memory.read(self.registers.pc);
-        Instruction::Nop
     }
-}
-
-#[derive(Debug)]
-pub enum Instruction {
-    Nop,
-    LD16,
 }

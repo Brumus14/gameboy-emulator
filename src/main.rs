@@ -13,5 +13,5 @@ fn main() {
     // let mut gameboy = Gameboy::new();
     // gameboy.cycle();
 
-    let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
+    // let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
 }

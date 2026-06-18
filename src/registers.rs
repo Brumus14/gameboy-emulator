@@ -1,7 +1,29 @@
-const ZERO_FLAG_BIT: u8 = 7;
-const SUBTRACTION_FLAG_BIT: u8 = 6;
-const HALF_CARRY_FLAG_BIT: u8 = 5;
-const CARRY_FLAG_BIT: u8 = 4;
+pub enum Register8 {
+    A,
+    F,
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+}
+
+pub enum Register16 {
+    AF,
+    BC,
+    DE,
+    HL,
+    SP,
+    PC,
+}
+
+pub enum Flag {
+    Zero,
+    Subtraction,
+    HalfCarry,
+    Carry,
+}
 
 pub struct Registers {
     pub a: u8,
@@ -42,6 +64,15 @@ impl Registers {
 
     pub fn hl(&self) -> u16 {
         ((self.h as u16) << 8) | self.l as u16
+    }
+
+    pub fn get_flag(&self, flag: Flag) -> bool {
+        match flag {
+            Flag::Zero => self.f & 0b10000000 != 0,
+            Flag::Subtraction => self.f & 0b01000000 != 0,
+            Flag::HalfCarry => self.f & 0b00100000 != 0,
+            Flag::Carry => self.f & 0b00010000 != 0,
+        }
     }
 
     pub fn zero(&self) -> bool {

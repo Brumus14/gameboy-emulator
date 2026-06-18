@@ -11,6 +11,6 @@ impl Cartridge {
     pub fn from_file(file_path: &str) -> io::Result<Self> {
         let rom = fs::read(file_path)?;
 
-        Ok(Self { rom })
+        Ok(Self { rom, mbc: None })
     }
 }
