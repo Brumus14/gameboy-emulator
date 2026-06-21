@@ -1,5 +1,3 @@
-pub type Address = u16;
-
 #[derive(Debug)]
 enum Region {
     RomBank0(u16),
@@ -34,7 +32,7 @@ impl Memory {
         }
     }
 
-    fn decode_address(address: Address) -> Region {
+    fn decode_address(address: u16) -> Region {
         match address {
             0x0000..0x4000 => !todo!("rom bank 00"),
             0x4000..0x8000 => !todo!("rom bank NN"),
@@ -50,7 +48,7 @@ impl Memory {
         }
     }
 
-    pub fn read(&self, address: Address) -> u8 {
+    pub fn read(&self, address: u16) -> u8 {
         match Self::decode_address(address) {
             Region::RomBank0(offset) => 0,
             Region::RomBankN(offset) => 0,
@@ -66,7 +64,7 @@ impl Memory {
         }
     }
 
-    pub fn write(&mut self, address: Address, value: u8) {
+    pub fn write(&mut self, address: u16, value: u8) {
         *match Self::decode_address(address) {
             Region::RomBank0(offset) => !todo!(),
             Region::RomBankN(offset) => !todo!(),

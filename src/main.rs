@@ -7,6 +7,7 @@ mod cpu;
 mod gameboy;
 mod mbc;
 mod memory;
+mod opcodes;
 mod registers;
 
 fn main() {

@@ -16,7 +16,7 @@ impl Gameboy {
     pub fn load_rom(&mut self) {}
 
     pub fn cycle(&mut self) {
-        let instruction = self.cpu.decode_instruction(&self.memory);
+        let instruction = self.cpu.cycle(&mut self.memory);
         println!("{:?}", instruction);
     }
 }

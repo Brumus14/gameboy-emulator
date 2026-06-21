@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub enum Register8 {
     A,
     F,
@@ -9,6 +10,7 @@ pub enum Register8 {
     L,
 }
 
+#[derive(Clone, Copy)]
 pub enum Register16 {
     AF,
     BC,
@@ -18,6 +20,7 @@ pub enum Register16 {
     PC,
 }
 
+#[derive(Clone, Copy)]
 pub enum Flag {
     Zero,
     Subtraction,
@@ -54,16 +57,64 @@ impl Registers {
         }
     }
 
-    pub fn bc(&self) -> u16 {
-        ((self.b as u16) << 8) | self.c as u16
+    pub fn get_register8(&self, register: Register8) -> u8 {
+        match register {
+            Register8::A => self.a,
+            Register8::F => self.f,
+            Register8::B => self.b,
+            Register8::C => self.c,
+            Register8::D => self.d,
+            Register8::E => self.e,
+            Register8::H => self.h,
+            Register8::L => self.l,
+        }
     }
 
-    pub fn de(&self) -> u16 {
-        ((self.d as u16) << 8) | self.e as u16
+    pub fn set_register8(&mut self, register: Register8, value: u8) {
+        match register {
+            Register8::A => self.a = value,
+            Register8::F => self.f = value,
+            Register8::B => self.b = value,
+            Register8::C => self.c = value,
+            Register8::D => self.d = value,
+            Register8::E => self.e = value,
+            Register8::H => self.h = value,
+            Register8::L => self.l = value,
+        }
     }
 
-    pub fn hl(&self) -> u16 {
-        ((self.h as u16) << 8) | self.l as u16
+    pub fn get_register16(&self, register: Register16) -> u16 {
+        match register {
+            Register16::AF => ((self.a as u16) << 8) | self.f as u16,
+            Register16::BC => ((self.b as u16) << 8) | self.c as u16,
+            Register16::DE => ((self.d as u16) << 8) | self.e as u16,
+            Register16::HL => ((self.h as u16) << 8) | self.l as u16,
+            Register16::SP => self.sp,
+            Register16::PC => self.pc,
+        }
+    }
+
+    pub fn set_register16(&mut self, register: Register16, value: u16) {
+        match register {
+            Register16::AF => {
+                self.a = (value >> 8) as u8;
+                self.f = (value & 0xFF) as u8;
+            }
+            Register16::BC => {
+                self.b = (value >> 8) as u8;
+                self.c = (value & 0xFF) as u8;
+            }
+            Register16::DE => {
+                self.d = (value >> 8) as u8;
+                self.e = (value & 0xFF) as u8;
+            }
+            Register16::HL => {
+                self.h = (value >> 8) as u8;
+                self.l = (value & 0xFF) as u8;
+            }
+            Register16::SP => self.sp = value,
+            Register16::PC => self.pc = value,
+        }
     }
 
     pub fn get_flag(&self, flag: Flag) -> bool {
@@ -75,19 +126,21 @@ impl Registers {
         }
     }
 
-    pub fn zero(&self) -> bool {
-        (self.f >> ZERO_FLAG_BIT) & 1 == 1
-    }
-
-    pub fn subtraction(&self) -> bool {
-        (self.f >> SUBTRACTION_FLAG_BIT) & 1 == 1
-    }
-
-    pub fn half_carry(&self) -> bool {
-        (self.f >> HALF_CARRY_FLAG_BIT) & 1 == 1
-    }
-
-    pub fn carry(&self) -> bool {
-        (self.f >> CARRY_FLAG_BIT) & 1 == 1
+    pub fn set_flag(&mut self, flag: Flag, value: bool) {
+        if value {
+            match flag {
+                Flag::Zero => self.f |= 0b10000000,
+                Flag::Subtraction => self.f |= 0b01000000,
+                Flag::HalfCarry => self.f |= 0b00100000,
+                Flag::Carry => self.f |= 0b00010000,
+            }
+        } else {
+            match flag {
+                Flag::Zero => self.f &= 0b01111111,
+                Flag::Subtraction => self.f &= 0b10111111,
+                Flag::HalfCarry => self.f &= 0b11011111,
+                Flag::Carry => self.f &= 0b11101111,
+            }
+        }
     }
 }
