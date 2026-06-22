@@ -1,5 +1,3 @@
-use std::intrinsics::unreachable;
-
 pub trait Mbc {
     fn read(&mut self, rom: &Vec<u8>, address: u16) -> u8;
     fn write(&mut self, rom: &Vec<u8>, address: u16, value: u8);

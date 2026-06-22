@@ -1,6 +1,7 @@
 use crate::opcodes::{
-    Cond, OperandType, R8, R16, R16mem, decode_cond, decode_r8, decode_r16, decode_r16mem,
-    get_cond, get_r8, get_r16, get_r16mem, parse_operand, set_r8, set_r16,
+    Cond, OperandType, R8, R16, R16mem, R16stk, decode_cond, decode_r8, decode_r16, decode_r16mem,
+    decode_r16stk, get_cond, get_r8, get_r16, get_r16mem, get_r16stk, parse_operand, set_r8,
+    set_r16, set_r16stk,
 };
 use crate::registers::{Flag, Register8, Register16};
 
@@ -16,6 +17,7 @@ pub enum Condition {
 pub struct Cpu {
     registers: Registers,
     interrupt_master_enable: bool,
+    interrupt_master_enable_pending: bool,
 }
 
 impl Cpu {
@@ -23,6 +25,7 @@ impl Cpu {
         Self {
             registers: Registers::new(),
             interrupt_master_enable: false,
+            interrupt_master_enable_pending: false,
         }
     }
 
@@ -38,6 +41,11 @@ impl Cpu {
     }
 
     pub fn cycle(&mut self, memory: &mut Memory) {
+        if self.interrupt_master_enable_pending {
+            self.interrupt_master_enable = true;
+            self.interrupt_master_enable_pending = false;
+        }
+
         let opcode = self.fetch(memory);
 
         if opcode == 0b00000000 {
@@ -102,6 +110,100 @@ impl Cpu {
         } else if opcode & 0b11111000 == 0b10000000 {
             let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
             self.add_a_r8(r8, memory);
+        } else if opcode & 0b11111000 == 0b10001000 {
+            let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            self.adc_a_r8(r8, memory);
+        } else if opcode & 0b11111000 == 0b10010000 {
+            let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            self.sub_a_r8(r8, memory);
+        } else if opcode & 0b11111000 == 0b10011000 {
+            let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            self.sbc_a_r8(r8, memory);
+            todo!()
+        } else if opcode & 0b11111000 == 0b10100000 {
+            let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            self.and_a_r8(r8, memory);
+        } else if opcode & 0b11111000 == 0b10101000 {
+            let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            self.xor_a_r8(r8, memory);
+        } else if opcode & 0b11111000 == 0b10110000 {
+            let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            self.or_a_r8(r8, memory);
+        } else if opcode & 0b11111000 == 0b10111000 {
+            let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            self.or_a_r8(r8, memory);
+        } else if opcode == 0b11000110 {
+            self.add_a_imm8(memory);
+        } else if opcode == 0b11001110 {
+            self.adc_a_imm8(memory);
+        } else if opcode == 0b11010110 {
+            self.sub_a_imm8(memory);
+        } else if opcode == 0b11011110 {
+            self.sbc_a_imm8(memory);
+        } else if opcode == 0b11100110 {
+            self.and_a_imm8(memory);
+        } else if opcode == 0b11101110 {
+            self.xor_a_imm8(memory);
+        } else if opcode == 0b11110110 {
+            self.or_a_imm8(memory);
+        } else if opcode == 0b11111110 {
+            self.cp_a_imm8(memory);
+        } else if opcode & 0b11100111 == 0b11000000 {
+            let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
+            self.ret_cond(cond, memory);
+        } else if opcode == 0b11001001 {
+            self.ret(memory);
+        } else if opcode == 0b11011001 {
+            self.reti(memory);
+        } else if opcode & 0b11100111 == 0b11000010 {
+            let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
+            self.jp_cond_imm16(cond, memory);
+        } else if opcode == 0b11000011 {
+            self.jp_imm16(memory);
+        } else if opcode == 0b11101001 {
+            self.jp_hl();
+        } else if opcode & 0b11100111 == 0b11000100 {
+            let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
+            self.call_cond_imm16(cond, memory);
+        } else if opcode == 0b11001101 {
+            self.call_imm16(memory);
+        } else if opcode & 0b11000111 == 0b11000111 {
+            let tgt3 = parse_operand(opcode, 3, OperandType::Tgt3);
+            self.rst_tgt3(tgt3, memory);
+        } else if opcode & 0b11001111 == 0b11000001 {
+            let r16stk = decode_r16stk(parse_operand(opcode, 3, OperandType::R16stk));
+            self.pop_r16stk(r16stk, memory);
+        } else if opcode & 0b11001111 == 0b11000101 {
+            let r16stk = decode_r16stk(parse_operand(opcode, 3, OperandType::R16stk));
+            self.push_r16stk(r16stk, memory);
+        } else if opcode == 0b11001011 {
+            let opcode = self.fetch(memory);
+
+            if opcode & 0b11111000 == 0b00000000 {
+                let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
+            }
+        } else if opcode == 0b11100010 {
+            self.ldh_c_a(memory);
+        } else if opcode == 0b11100000 {
+            self.ldh_imm8_a(memory);
+        } else if opcode == 0b11101010 {
+            self.ld_imm16_a(memory);
+        } else if opcode == 0b11110010 {
+            self.ldh_a_c(memory);
+        } else if opcode == 0b11110000 {
+            self.ldh_a_imm8(memory);
+        } else if opcode == 0b11111010 {
+            self.ld_a_imm16(memory);
+        } else if opcode == 0b11101000 {
+            self.add_sp_imm8(memory);
+        } else if opcode == 0b11111000 {
+            self.ld_hl_sp_imm8(memory);
+        } else if opcode == 0b11111001 {
+            self.ld_sp_hl();
+        } else if opcode == 0b11110011 {
+            self.di();
+        } else if opcode == 0b11111011 {
+            self.ei();
         }
     }
 
@@ -309,11 +411,9 @@ impl Cpu {
     }
 
     fn jr_cond_imm8(&mut self, cond: Cond, memory: &mut Memory) {
-        if !get_cond(cond, &self.registers) {
-            return;
+        if get_cond(cond, &self.registers) {
+            self.jr_imm8(memory);
         }
-
-        self.jr_imm8(memory);
     }
 
     fn stop(&mut self, memory: &mut Memory) {
@@ -337,6 +437,22 @@ impl Cpu {
     fn add_a_r8(&mut self, r8: R8, memory: &Memory) {
         let a = self.registers.get_register8(Register8::A);
         let value = get_r8(r8, &self.registers, memory);
+
+        let (result, carry) = a.overflowing_add(value);
+
+        self.registers.set_register8(Register8::A, result);
+
+        let half_carry = (a & 0xF) + (value & 0xF) > 0xF;
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, half_carry);
+        self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn adc_a_r8(&mut self, r8: R8, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = get_r8(r8, &self.registers, memory);
         let carry_value = self.registers.get_flag(Flag::Carry) as u8;
 
         let result = a.wrapping_add(value).wrapping_add(carry_value);
@@ -355,5 +471,474 @@ impl Cpu {
         self.registers.set_flag(Flag::Subtraction, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn sub_a_r8(&mut self, r8: R8, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = get_r8(r8, &self.registers, memory);
+
+        let result = a.wrapping_sub(value);
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers
+            .set_flag(Flag::HalfCarry, (value & 0xF) > (a & 0xF));
+        self.registers.set_flag(Flag::Carry, value > a);
+    }
+
+    fn sbc_a_r8(&mut self, r8: R8, memory: &Memory) {
+        // let a = self.registers.get_register8(Register8::A);
+        // let value = get_r8(r8, &self.registers, memory);
+        // let carry_value = self.registers.get_flag(Flag::Carry) as u8;
+        //
+        // let result = a.wrapping_sub(value).wrapping_sub(carry_value);
+        //
+        // self.registers.set_register8(Register8::A, result);
+        //
+        // let half_carry = (a & 0xF) + (value & 0xF) + carry_value > 0xF;
+        //
+        // let (sum, mut carry) = a.overflowing_add(value);
+        //
+        // if !carry {
+        //     (_, carry) = sum.overflowing_add(carry_value);
+        // }
+        //
+        // self.registers.set_flag(Flag::Zero, result == 0);
+        // self.registers.set_flag(Flag::Subtraction, false);
+        // self.registers.set_flag(Flag::HalfCarry, half_carry);
+        // self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn and_a_r8(&mut self, r8: R8, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = get_r8(r8, &self.registers, memory);
+        let result = a & value;
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, true);
+        self.registers.set_flag(Flag::Carry, false);
+    }
+
+    fn xor_a_r8(&mut self, r8: R8, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = get_r8(r8, &self.registers, memory);
+        let result = a ^ value;
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, false);
+    }
+
+    fn or_a_r8(&mut self, r8: R8, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = get_r8(r8, &self.registers, memory);
+        let result = a | value;
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, false);
+    }
+
+    fn cp_a_r8(&mut self, r8: R8, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = get_r8(r8, &self.registers, memory);
+
+        let result = a.wrapping_sub(value);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers
+            .set_flag(Flag::HalfCarry, (value & 0xF) > (a & 0xF));
+        self.registers.set_flag(Flag::Carry, value > a);
+    }
+
+    fn add_a_imm8(&mut self, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = self.fetch(memory);
+
+        let (result, carry) = a.overflowing_add(value);
+
+        self.registers.set_register8(Register8::A, result);
+
+        let half_carry = (a & 0xF) + (value & 0xF) > 0xF;
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, half_carry);
+        self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn adc_a_imm8(&mut self, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = self.fetch(memory);
+        let carry_value = self.registers.get_flag(Flag::Carry) as u8;
+
+        let result = a.wrapping_add(value).wrapping_add(carry_value);
+
+        self.registers.set_register8(Register8::A, result);
+
+        let half_carry = (a & 0xF) + (value & 0xF) + carry_value > 0xF;
+
+        let (sum, mut carry) = a.overflowing_add(value);
+
+        if !carry {
+            (_, carry) = sum.overflowing_add(carry_value);
+        }
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, half_carry);
+        self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn sub_a_imm8(&mut self, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = self.fetch(memory);
+
+        let result = a.wrapping_sub(value);
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers
+            .set_flag(Flag::HalfCarry, (value & 0xF) > (a & 0xF));
+        self.registers.set_flag(Flag::Carry, value > a);
+    }
+
+    fn sbc_a_imm8(&mut self, memory: &Memory) {
+        // let a = self.registers.get_register8(Register8::A);
+        // let value = self.fetch(memory);
+        // let carry_value = self.registers.get_flag(Flag::Carry) as u8;
+        //
+        // let result = a.wrapping_sub(value).wrapping_sub(carry_value);
+        //
+        // self.registers.set_register8(Register8::A, result);
+        //
+        // let half_carry = (a & 0xF) + (value & 0xF) + carry_value > 0xF;
+        //
+        // let (sum, mut carry) = a.overflowing_add(value);
+        //
+        // if !carry {
+        //     (_, carry) = sum.overflowing_add(carry_value);
+        // }
+        //
+        // self.registers.set_flag(Flag::Zero, result == 0);
+        // self.registers.set_flag(Flag::Subtraction, false);
+        // self.registers.set_flag(Flag::HalfCarry, half_carry);
+        // self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn and_a_imm8(&mut self, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = self.fetch(memory);
+        let result = a & value;
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, true);
+        self.registers.set_flag(Flag::Carry, false);
+    }
+
+    fn xor_a_imm8(&mut self, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = self.fetch(memory);
+        let result = a ^ value;
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, false);
+    }
+
+    fn or_a_imm8(&mut self, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = self.fetch(memory);
+        let result = a | value;
+
+        self.registers.set_register8(Register8::A, result);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, false);
+    }
+
+    fn cp_a_imm8(&mut self, memory: &Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        let value = self.fetch(memory);
+
+        let result = a.wrapping_sub(value);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers
+            .set_flag(Flag::HalfCarry, (value & 0xF) > (a & 0xF));
+        self.registers.set_flag(Flag::Carry, value > a);
+    }
+
+    fn ret_cond(&mut self, cond: Cond, memory: &Memory) {
+        if get_cond(cond, &self.registers) {
+            self.ret(memory);
+        }
+    }
+
+    fn ret(&mut self, memory: &Memory) {
+        let mut sp = self.registers.get_register16(Register16::SP);
+
+        let mut value = memory.read(sp) as u16;
+        sp = sp.wrapping_add(1);
+
+        value += (memory.read(sp) as u16) << 8;
+        sp = sp.wrapping_add(1);
+
+        self.registers.set_register16(Register16::PC, value);
+        self.registers.set_register16(Register16::SP, sp);
+    }
+
+    fn reti(&mut self, memory: &Memory) {
+        self.ei();
+        self.ret(memory);
+    }
+
+    fn jp_cond_imm16(&mut self, cond: Cond, memory: &Memory) {
+        if get_cond(cond, &self.registers) {
+            self.jp_imm16(memory);
+        }
+    }
+
+    fn jp_imm16(&mut self, memory: &Memory) {
+        let pc = self.fetch_16(memory);
+        self.registers.set_register16(Register16::PC, pc);
+    }
+
+    fn jp_hl(&mut self) {
+        let hl = self.registers.get_register16(Register16::HL);
+        self.registers.set_register16(Register16::PC, hl);
+    }
+
+    fn call_cond_imm16(&mut self, cond: Cond, memory: &mut Memory) {
+        if get_cond(cond, &self.registers) {
+            self.call_imm16(memory);
+        }
+    }
+
+    fn call_imm16(&mut self, memory: &mut Memory) {
+        let pc = self.registers.get_register16(Register16::PC);
+        let mut sp = self.registers.get_register16(Register16::SP);
+
+        sp = sp.wrapping_sub(1);
+        memory.write(sp, (pc >> 8) as u8);
+
+        sp = sp.wrapping_sub(1);
+        memory.write(sp, (pc & 0xFF) as u8);
+
+        self.registers.set_register16(Register16::SP, sp);
+
+        self.jp_imm16(memory);
+    }
+
+    fn rst_tgt3(&mut self, tgt3: u8, memory: &mut Memory) {
+        if tgt3 != 0x00
+            && tgt3 != 0x08
+            && tgt3 != 0x10
+            && tgt3 != 0x18
+            && tgt3 != 0x20
+            && tgt3 != 0x28
+            && tgt3 != 0x30
+            && tgt3 != 0x38
+        {
+            unreachable!()
+        }
+
+        let pc = self.registers.get_register16(Register16::PC);
+        let mut sp = self.registers.get_register16(Register16::SP);
+
+        sp = sp.wrapping_sub(1);
+        memory.write(sp, (pc >> 8) as u8);
+
+        sp = sp.wrapping_sub(1);
+        memory.write(sp, (pc & 0xFF) as u8);
+
+        self.registers.set_register16(Register16::SP, sp);
+        self.registers.set_register16(Register16::PC, tgt3 as u16);
+    }
+
+    fn pop_r16stk(&mut self, r16stk: R16stk, memory: &Memory) {
+        let mut sp = self.registers.get_register16(Register16::SP);
+
+        let mut value = memory.read(sp) as u16;
+        sp = sp.wrapping_add(1);
+
+        value += (memory.read(sp) as u16) << 8;
+        sp = sp.wrapping_add(1);
+
+        set_r16stk(r16stk, value, &mut self.registers);
+        self.registers.set_register16(Register16::SP, sp);
+    }
+
+    fn push_r16stk(&mut self, r16stk: R16stk, memory: &mut Memory) {
+        let value = get_r16stk(r16stk, &self.registers);
+        let mut sp = self.registers.get_register16(Register16::SP);
+
+        sp = sp.wrapping_sub(1);
+        memory.write(sp, (value >> 8) as u8);
+
+        sp = sp.wrapping_sub(1);
+        memory.write(sp, (value & 0xFF) as u8);
+
+        self.registers.set_register16(Register16::SP, sp);
+    }
+
+    fn rlc_r8(&mut self, r8: R8, memory: &mut Memory) {
+        let value = get_r8(r8, &self.registers, memory);
+        let result = value.rotate_left(1);
+        set_r8(r8, result, &mut self.registers, memory);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, result & 1 == 1);
+    }
+
+    fn rrc_r8(&mut self, r8: R8, memory: &mut Memory) {
+        let value = get_r8(r8, &self.registers, memory);
+        let result = value.rotate_right(1);
+        set_r8(r8, result, &mut self.registers, memory);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, result >> 7 == 1);
+    }
+
+    fn rl_r8(&mut self, r8: R8, memory: &mut Memory) {
+        let value = get_r8(r8, &self.registers, memory);
+        let mut result = value.rotate_left(1);
+        let carry = result & 1 == 1;
+
+        if carry {
+            result |= 1;
+        } else {
+            result &= !1;
+        }
+
+        set_r8(r8, result, &mut self.registers, memory);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn rr_r8(&mut self, r8: R8, memory: &mut Memory) {
+        let value = get_r8(r8, &self.registers, memory);
+        let mut result = value.rotate_right(1);
+        let carry = result >> 7 == 1;
+
+        if carry {
+            result |= 1 << 7;
+        } else {
+            result &= !(1 << 7);
+        }
+
+        set_r8(r8, result, &mut self.registers, memory);
+
+        self.registers.set_flag(Flag::Zero, result == 0);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, false);
+        self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn ldh_c_a(&mut self, memory: &mut Memory) {
+        let address = 0xFF00 + self.registers.get_register8(Register8::C) as u16;
+        let a = self.registers.get_register8(Register8::A);
+        memory.write(address, a);
+    }
+
+    fn ldh_imm8_a(&mut self, memory: &mut Memory) {
+        let address = 0xFF00 + self.fetch(memory) as u16;
+        let a = self.registers.get_register8(Register8::A);
+        memory.write(address, a);
+    }
+
+    fn ld_imm16_a(&mut self, memory: &mut Memory) {
+        let a = self.registers.get_register8(Register8::A);
+        memory.write(self.fetch_16(memory), a);
+    }
+
+    fn ldh_a_c(&mut self, memory: &Memory) {
+        let address = 0xFF00 + self.registers.get_register8(Register8::C) as u16;
+        let value = memory.read(address);
+        self.registers.set_register8(Register8::A, value);
+    }
+
+    fn ldh_a_imm8(&mut self, memory: &Memory) {
+        let address = 0xFF00 + self.fetch(memory) as u16;
+        let value = memory.read(address);
+        self.registers.set_register8(Register8::A, value);
+    }
+
+    fn ld_a_imm16(&mut self, memory: &Memory) {
+        let value = memory.read(self.fetch_16(memory));
+        self.registers.set_register8(Register8::A, value);
+    }
+
+    fn add_sp_imm8(&mut self, memory: &Memory) {
+        let sp = self.registers.get_register16(Register16::SP);
+        let value = self.fetch(memory) as i8 as i16;
+        let (result, carry) = sp.overflowing_add_signed(value);
+
+        self.registers.set_register16(Register16::HL, result);
+
+        let half_carry = (sp & 0xF).wrapping_add_signed(value & 0xF) > 0xF;
+
+        self.registers.set_flag(Flag::Zero, false);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, half_carry);
+        self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn ld_hl_sp_imm8(&mut self, memory: &Memory) {
+        let value = self.fetch(memory) as i8 as i16;
+        let sp = self.registers.get_register16(Register16::SP);
+        let (result, carry) = sp.overflowing_add_signed(value);
+
+        self.registers.set_register16(Register16::HL, result);
+
+        let half_carry = (sp & 0xF).wrapping_add_signed(value & 0xF) > 0xF;
+
+        self.registers.set_flag(Flag::Zero, false);
+        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::HalfCarry, half_carry);
+        self.registers.set_flag(Flag::Carry, carry);
+    }
+
+    fn ld_sp_hl(&mut self) {
+        let hl = self.registers.get_register16(Register16::HL);
+        self.registers.set_register16(Register16::SP, hl);
+    }
+
+    fn di(&mut self) {
+        self.interrupt_master_enable = false;
+    }
+
+    fn ei(&mut self) {
+        self.interrupt_master_enable_pending = true;
     }
 }
