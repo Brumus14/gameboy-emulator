@@ -1,22 +1,28 @@
-use crate::{cpu::Cpu, memory::Memory};
+use crate::{bus::Bus, cartridge::Cartridge, cpu::Cpu};
 
 pub struct Gameboy {
     cpu: Cpu,
-    memory: Memory,
+    bus: Bus,
 }
 
 impl Gameboy {
     pub fn new() -> Self {
         Self {
             cpu: Cpu::new(),
-            memory: Memory::new(),
+            bus: Bus::new(),
         }
     }
 
-    pub fn load_rom(&mut self) {}
+    pub fn load_cartridge(&mut self, cartridge: Cartridge) {
+        self.bus.cartridge = Some(cartridge);
+    }
+
+    pub fn unload_cartridge(&mut self) {
+        self.bus.cartridge = None;
+    }
 
     pub fn cycle(&mut self) {
-        let instruction = self.cpu.cycle(&mut self.memory);
-        println!("{:?}", instruction);
+        // let instruction = self.cpu.cycle(&mut self.memory);
+        // println!("{:?}", instruction);
     }
 }

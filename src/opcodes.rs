@@ -1,5 +1,5 @@
 use crate::{
-    memory::Memory,
+    bus::Bus,
     registers::{Flag, Register8, Register16, Registers},
 };
 
@@ -126,7 +126,7 @@ pub fn parse_operand(opcode: u8, start_bit_index: u8, operand_type: OperandType)
     (opcode >> start_bit_index) & ((1 << operand_size) - 1)
 }
 
-pub fn get_r8(operand: R8, registers: &Registers, memory: &Memory) -> u8 {
+pub fn get_r8(operand: R8, registers: &Registers, bus: &mut Bus) -> u8 {
     match operand {
         R8::B => registers.get_register8(Register8::B),
         R8::C => registers.get_register8(Register8::C),
@@ -134,12 +134,12 @@ pub fn get_r8(operand: R8, registers: &Registers, memory: &Memory) -> u8 {
         R8::E => registers.get_register8(Register8::E),
         R8::H => registers.get_register8(Register8::H),
         R8::L => registers.get_register8(Register8::L),
-        R8::MemoryHL => memory.read(registers.get_register16(Register16::HL)),
+        R8::MemoryHL => bus.read(registers.get_register16(Register16::HL)),
         R8::A => registers.get_register8(Register8::A),
     }
 }
 
-pub fn set_r8(operand: R8, value: u8, registers: &mut Registers, memory: &mut Memory) {
+pub fn set_r8(operand: R8, value: u8, registers: &mut Registers, bus: &mut Bus) {
     match operand {
         R8::B => registers.set_register8(Register8::B, value),
         R8::C => registers.set_register8(Register8::C, value),
@@ -147,7 +147,7 @@ pub fn set_r8(operand: R8, value: u8, registers: &mut Registers, memory: &mut Me
         R8::E => registers.set_register8(Register8::E, value),
         R8::H => registers.set_register8(Register8::H, value),
         R8::L => registers.set_register8(Register8::L, value),
-        R8::MemoryHL => memory.write(registers.get_register16(Register16::HL), value),
+        R8::MemoryHL => bus.write(registers.get_register16(Register16::HL), value),
         R8::A => registers.set_register8(Register8::A, value),
     }
 }
