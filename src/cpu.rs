@@ -48,6 +48,7 @@ impl Cpu {
             self.interrupt_master_enable_pending = false;
         }
 
+        println!("{}", self.registers.get_register16(Register16::PC));
         let opcode = self.fetch(bus);
 
         if opcode == 0b00000000 {

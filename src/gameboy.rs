@@ -22,7 +22,6 @@ impl Gameboy {
     }
 
     pub fn cycle(&mut self) {
-        // let instruction = self.cpu.cycle(&mut self.memory);
-        // println!("{:?}", instruction);
+        self.cpu.cycle(&mut self.bus);
     }
 }

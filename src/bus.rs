@@ -1,4 +1,7 @@
-use crate::{cartridge::Cartridge, interrupts::Interrupts, joypad::Joypad, ppu::Ppu, timer::Timer};
+use crate::{
+    audio::Audio, cartridge::Cartridge, interrupts::Interrupts, joypad::Joypad, ppu::Ppu,
+    serial::Serial, timer::Timer,
+};
 
 #[derive(Debug)]
 enum Region {
@@ -22,6 +25,8 @@ pub struct Bus {
     pub interrupts: Interrupts,
     pub joypad: Joypad,
     pub timer: Timer,
+    pub serial: Serial,
+    pub audio: Audio,
 }
 
 impl Bus {
@@ -34,6 +39,8 @@ impl Bus {
             interrupts: Interrupts::new(),
             joypad: Joypad::new(),
             timer: Timer::new(),
+            serial: Serial::new(),
+            audio: Audio::new(),
         }
     }
 
@@ -60,7 +67,7 @@ impl Bus {
             0xFEA0..0xFF00 => 0xFF, // TODO: might be different
             0xFF00..0xFF80 => self.read_io(address),
             0xFF80..0xFFFF => self.hram[(address - 0xFF80) as usize],
-            0xFFFF => self.interrupts.enabled,
+            0xFFFF => self.interrupts.read(address),
         }
     }
 
@@ -83,7 +90,7 @@ impl Bus {
             0xFEA0..0xFF00 => (), // TODO: might be different
             0xFF00..0xFF80 => self.write_io(address, value),
             0xFF80..0xFFFF => self.hram[(address - 0xFF80) as usize] = value,
-            0xFFFF => self.interrupts.enabled = value,
+            0xFFFF => self.interrupts.write(address, value),
         }
     }
 
@@ -91,18 +98,29 @@ impl Bus {
         match address {
             0x0000..0xFF00 => unreachable!(),
             0xFF00 => self.joypad.read(),
-            0xFF01..=0xFF02 => todo!(),
+            0xFF01..=0xFF02 => self.serial.read(address),
             0xFF04..=0xFF07 => self.timer.read(address),
-            0xFF0F => self.interrupts.read(),
-            0xFF10..=0xFF26 => todo!(),
-            0xFF30..=0xFF3F => todo!(),
-            0xFF40..=0xFF4B => todo!(),
-            // 0xFF46 => todo!(),
+            0xFF0F => self.interrupts.read(address),
+            0xFF10..=0xFF3F => self.audio.read(address),
+            0xFF40..=0xFF4B => self.ppu.read(address),
             0xFF50 => todo!(),
             0xFF70..=0xFFFF => unreachable!(),
             _ => 0xFF,
         }
     }
 
-    fn write_io(&mut self, address: u16, value: u8) {}
+    fn write_io(&mut self, address: u16, value: u8) {
+        match address {
+            0x0000..0xFF00 => unreachable!(),
+            0xFF00 => self.joypad.write(value),
+            0xFF01..=0xFF02 => self.serial.write(address, value),
+            0xFF04..=0xFF07 => self.timer.write(address, value),
+            0xFF0F => self.interrupts.write(address, value),
+            0xFF10..=0xFF3F => self.audio.write(address, value),
+            0xFF40..=0xFF4B => self.ppu.write(address, value),
+            0xFF50 => todo!(),
+            0xFF70..=0xFFFF => unreachable!(),
+            _ => (),
+        }
+    }
 }
