@@ -1,6 +1,6 @@
 use std::{fs, io};
 
-use crate::mbc::Mbc;
+use crate::core::mbc::Mbc;
 
 pub struct Cartridge {
     pub rom: Vec<u8>,
@@ -42,6 +42,7 @@ impl Cartridge {
             mbc.write(&self.rom, &mut self.ram, address, value);
         } else {
             match address {
+                0x0000..0xA000 => (),
                 0xA000..0xC000 => {
                     if let Some(ram) = &mut self.ram {
                         ram[(address - 0xA000) as usize] = value;

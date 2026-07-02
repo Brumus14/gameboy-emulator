@@ -1,11 +1,11 @@
-use crate::opcodes::{
+use crate::core::opcodes::{
     Cond, OperandType, R8, R16, R16mem, R16stk, decode_cond, decode_r8, decode_r16, decode_r16mem,
     decode_r16stk, get_cond, get_r8, get_r16, get_r16mem, get_r16stk, parse_operand, set_r8,
     set_r16, set_r16stk,
 };
-use crate::registers::{Flag, Register8, Register16};
+use crate::core::registers::{Flag, Register8, Register16};
 
-use crate::{bus::Bus, registers::Registers};
+use crate::core::{bus::Bus, registers::Registers};
 
 pub enum Condition {
     NotZero,
@@ -34,7 +34,9 @@ impl Cpu {
     fn fetch(&mut self, bus: &mut Bus) -> u8 {
         let pc = self.registers.get_register16(Register16::PC);
         self.registers.set_register16(Register16::PC, pc + 1);
-        bus.read(pc)
+        let v = bus.read(pc); // Remove
+        print!("    {:08b}", v);
+        v
     }
 
     fn fetch_16(&mut self, bus: &mut Bus) -> u16 {
@@ -48,7 +50,7 @@ impl Cpu {
             self.interrupt_master_enable_pending = false;
         }
 
-        println!("{}", self.registers.get_register16(Register16::PC));
+        print!("{:04X}    |", self.registers.get_register16(Register16::PC));
         let opcode = self.fetch(bus);
 
         if opcode == 0b00000000 {
@@ -241,6 +243,10 @@ impl Cpu {
         } else if opcode == 0b11111011 {
             self.ei();
         }
+
+        println!();
+        self.registers.print();
+        println!();
     }
 
     fn ld_r16_imm16(&mut self, r16: R16, bus: &mut Bus) {
@@ -284,7 +290,7 @@ impl Cpu {
 
         let half_carry = (hl & 0xFFF) + (value & 0xFFF) > 0xFFF;
 
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -297,7 +303,7 @@ impl Cpu {
         let half_carry = (value & 0xF) + 1 > 0xF;
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
     }
 
@@ -309,7 +315,7 @@ impl Cpu {
         let half_carry = value & 0xF == 0;
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers.set_flag(Flag::Negative, true);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
     }
 
@@ -324,7 +330,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, false);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, result & 1 == 1);
     }
@@ -334,7 +340,7 @@ impl Cpu {
         let result = value.rotate_right(1);
 
         self.registers.set_flag(Flag::Zero, false);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, result >> 7 == 1);
     }
@@ -353,7 +359,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, false);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -372,7 +378,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, false);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -384,7 +390,7 @@ impl Cpu {
         let half_carry = self.registers.get_flag(Flag::HalfCarry);
         let carry = self.registers.get_flag(Flag::Carry);
 
-        if self.registers.get_flag(Flag::Subtraction) {
+        if self.registers.get_flag(Flag::Negative) {
             if half_carry {
                 adjustment += 0x6;
             }
@@ -420,18 +426,18 @@ impl Cpu {
         let a = self.registers.get_register8(Register8::A);
         self.registers.set_register8(Register8::A, !a);
 
-        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers.set_flag(Flag::Negative, true);
         self.registers.set_flag(Flag::HalfCarry, true);
     }
 
     fn scf(&mut self) {
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, true);
     }
 
     fn ccf(&mut self) {
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
 
         let carry = self.registers.get_flag(Flag::Carry);
@@ -481,7 +487,7 @@ impl Cpu {
         let half_carry = (a & 0xF) + (value & 0xF) > 0xF;
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -504,7 +510,7 @@ impl Cpu {
         }
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -518,7 +524,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers.set_flag(Flag::Negative, true);
         self.registers
             .set_flag(Flag::HalfCarry, (a & 0xF) < (value & 0xF));
         self.registers.set_flag(Flag::Carry, a < value);
@@ -537,7 +543,7 @@ impl Cpu {
         let carry = (a as u16) < (value as u16) + (carry_value as u16);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -550,7 +556,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, true);
         self.registers.set_flag(Flag::Carry, false);
     }
@@ -563,7 +569,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
     }
@@ -576,7 +582,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
     }
@@ -588,7 +594,7 @@ impl Cpu {
         let result = a.wrapping_sub(value);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers.set_flag(Flag::Negative, true);
         self.registers
             .set_flag(Flag::HalfCarry, (value & 0xF) > (a & 0xF));
         self.registers.set_flag(Flag::Carry, value > a);
@@ -605,7 +611,7 @@ impl Cpu {
         let half_carry = (a & 0xF) + (value & 0xF) > 0xF;
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -628,7 +634,7 @@ impl Cpu {
         }
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -642,7 +648,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers.set_flag(Flag::Negative, true);
         self.registers
             .set_flag(Flag::HalfCarry, (value & 0xF) > (a & 0xF));
         self.registers.set_flag(Flag::Carry, value > a);
@@ -661,7 +667,7 @@ impl Cpu {
         let carry = (a as u16) < (value as u16) + (carry_value as u16);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -674,7 +680,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, true);
         self.registers.set_flag(Flag::Carry, false);
     }
@@ -687,7 +693,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
     }
@@ -700,7 +706,7 @@ impl Cpu {
         self.registers.set_register8(Register8::A, result);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
     }
@@ -712,7 +718,7 @@ impl Cpu {
         let result = a.wrapping_sub(value);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, true);
+        self.registers.set_flag(Flag::Negative, true);
         self.registers
             .set_flag(Flag::HalfCarry, (value & 0xF) > (a & 0xF));
         self.registers.set_flag(Flag::Carry, value > a);
@@ -780,17 +786,7 @@ impl Cpu {
     }
 
     fn rst_tgt3(&mut self, tgt3: u8, bus: &mut Bus) {
-        if tgt3 != 0x00
-            && tgt3 != 0x08
-            && tgt3 != 0x10
-            && tgt3 != 0x18
-            && tgt3 != 0x20
-            && tgt3 != 0x28
-            && tgt3 != 0x30
-            && tgt3 != 0x38
-        {
-            unreachable!()
-        }
+        let address = 8 * (tgt3 as u16);
 
         let pc = self.registers.get_register16(Register16::PC);
         let mut sp = self.registers.get_register16(Register16::SP);
@@ -802,7 +798,7 @@ impl Cpu {
         bus.write(sp, (pc & 0xFF) as u8);
 
         self.registers.set_register16(Register16::SP, sp);
-        self.registers.set_register16(Register16::PC, tgt3 as u16);
+        self.registers.set_register16(Register16::PC, address);
     }
 
     fn pop_r16stk(&mut self, r16stk: R16stk, bus: &mut Bus) {
@@ -837,7 +833,7 @@ impl Cpu {
         set_r8(r8, result, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, result & 1 == 1);
     }
@@ -848,7 +844,7 @@ impl Cpu {
         set_r8(r8, result, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, result >> 7 == 1);
     }
@@ -867,7 +863,7 @@ impl Cpu {
         set_r8(r8, result, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -886,7 +882,7 @@ impl Cpu {
         set_r8(r8, result, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -899,7 +895,7 @@ impl Cpu {
         set_r8(r8, value, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -917,7 +913,7 @@ impl Cpu {
         set_r8(r8, value, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, value & 1 == 1);
     }
@@ -929,7 +925,7 @@ impl Cpu {
         set_r8(r8, result, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
     }
@@ -941,7 +937,7 @@ impl Cpu {
         set_r8(r8, value, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, value & 1 == 1);
     }
@@ -951,7 +947,7 @@ impl Cpu {
         let bit = (value >> b3) & 1;
 
         self.registers.set_flag(Flag::Zero, bit == 0);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, true);
     }
 
@@ -1013,7 +1009,7 @@ impl Cpu {
         let half_carry = (sp & 0xF).wrapping_add_signed(value & 0xF) > 0xF;
 
         self.registers.set_flag(Flag::Zero, false);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }
@@ -1028,7 +1024,7 @@ impl Cpu {
         let half_carry = (sp & 0xF).wrapping_add_signed(value & 0xF) > 0xF;
 
         self.registers.set_flag(Flag::Zero, false);
-        self.registers.set_flag(Flag::Subtraction, false);
+        self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
     }

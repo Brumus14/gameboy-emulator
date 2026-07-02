@@ -41,7 +41,7 @@ impl Timer {
         self.tick_count += 1;
 
         if self.tick_count % 256 == 0 {
-            self.div += 1;
+            self.div = self.div.wrapping_add(1); // Is this correct?
         }
 
         let enabled = self.tac & 0b00000100 == 0b00000100;

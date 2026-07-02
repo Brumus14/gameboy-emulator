@@ -23,7 +23,7 @@ pub enum Register16 {
 #[derive(Clone, Copy)]
 pub enum Flag {
     Zero,
-    Subtraction,
+    Negative,
     HalfCarry,
     Carry,
 }
@@ -52,7 +52,7 @@ impl Registers {
             e: 0,
             h: 0,
             l: 0,
-            sp: 0,
+            sp: 0xFFFE,
             pc: 0x100,
         }
     }
@@ -120,7 +120,7 @@ impl Registers {
     pub fn get_flag(&self, flag: Flag) -> bool {
         match flag {
             Flag::Zero => self.f & 0b10000000 != 0,
-            Flag::Subtraction => self.f & 0b01000000 != 0,
+            Flag::Negative => self.f & 0b01000000 != 0,
             Flag::HalfCarry => self.f & 0b00100000 != 0,
             Flag::Carry => self.f & 0b00010000 != 0,
         }
@@ -130,17 +130,24 @@ impl Registers {
         if value {
             match flag {
                 Flag::Zero => self.f |= 0b10000000,
-                Flag::Subtraction => self.f |= 0b01000000,
+                Flag::Negative => self.f |= 0b01000000,
                 Flag::HalfCarry => self.f |= 0b00100000,
                 Flag::Carry => self.f |= 0b00010000,
             }
         } else {
             match flag {
                 Flag::Zero => self.f &= 0b01111111,
-                Flag::Subtraction => self.f &= 0b10111111,
+                Flag::Negative => self.f &= 0b10111111,
                 Flag::HalfCarry => self.f &= 0b11011111,
                 Flag::Carry => self.f &= 0b11101111,
             }
         }
+    }
+
+    pub fn print(&self) {
+        println!(
+            "a:{:02X}, f:{:02X}, b:{:02X}, c:{:02X}, d:{:02X}, e:{:02X}, h:{:02X}, l:{:02X}, sp:{:04X}, pc:{:04X}",
+            self.a, self.f, self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.pc
+        );
     }
 }

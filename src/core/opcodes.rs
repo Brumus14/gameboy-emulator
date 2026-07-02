@@ -1,4 +1,4 @@
-use crate::{
+use crate::core::{
     bus::Bus,
     registers::{Flag, Register8, Register16, Registers},
 };

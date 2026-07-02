@@ -1,6 +1,6 @@
-pub struct Audio {}
+pub struct Apu {}
 
-impl Audio {
+impl Apu {
     pub fn new() -> Self {
         Self {}
     }

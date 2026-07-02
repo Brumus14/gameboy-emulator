@@ -1,8 +1,11 @@
-use crate::{bus::Bus, cartridge::Cartridge, cpu::Cpu};
+use std::{thread::sleep, time::Duration};
+
+use crate::core::{bus::Bus, cartridge::Cartridge, cpu::Cpu};
 
 pub struct Gameboy {
     cpu: Cpu,
     bus: Bus,
+    cycle_count: u64,
 }
 
 impl Gameboy {
@@ -10,6 +13,7 @@ impl Gameboy {
         Self {
             cpu: Cpu::new(),
             bus: Bus::new(),
+            cycle_count: 0,
         }
     }
 
@@ -21,7 +25,15 @@ impl Gameboy {
         self.bus.cartridge = None;
     }
 
-    pub fn cycle(&mut self) {
+    pub fn on(&mut self) {
+        loop {
+            self.cycle();
+            sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn cycle(&mut self) {
         self.cpu.cycle(&mut self.bus);
+        self.bus.timer.tick();
     }
 }

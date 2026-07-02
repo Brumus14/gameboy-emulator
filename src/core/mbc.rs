@@ -35,7 +35,7 @@ impl Mbc for Mbc1 {
                 {
                     ram[(address - 0xA000) as usize]
                 } else {
-                    0xFF // maybe not?
+                    0 // maybe not?
                 }
             }
             _ => unreachable!(),

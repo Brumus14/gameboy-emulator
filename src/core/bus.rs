@@ -1,5 +1,5 @@
-use crate::{
-    audio::Audio, cartridge::Cartridge, interrupts::Interrupts, joypad::Joypad, ppu::Ppu,
+use crate::core::{
+    apu::Apu, cartridge::Cartridge, interrupts::Interrupts, joypad::Joypad, ppu::Ppu,
     serial::Serial, timer::Timer,
 };
 
@@ -26,7 +26,7 @@ pub struct Bus {
     pub joypad: Joypad,
     pub timer: Timer,
     pub serial: Serial,
-    pub audio: Audio,
+    pub audio: Apu,
 }
 
 impl Bus {
@@ -40,7 +40,7 @@ impl Bus {
             joypad: Joypad::new(),
             timer: Timer::new(),
             serial: Serial::new(),
-            audio: Audio::new(),
+            audio: Apu::new(),
         }
     }
 
@@ -50,7 +50,7 @@ impl Bus {
                 if let Some(cartridge) = &mut self.cartridge {
                     cartridge.read(address)
                 } else {
-                    0xFF
+                    0
                 }
             }
             0x8000..0xA000 => self.ppu.read(address),
@@ -58,7 +58,7 @@ impl Bus {
                 if let Some(cartridge) = &mut self.cartridge {
                     cartridge.read(address)
                 } else {
-                    0xFF
+                    0
                 }
             }
             0xC000..0xE000 => self.wram[(address - 0xC000) as usize],
@@ -105,7 +105,7 @@ impl Bus {
             0xFF40..=0xFF4B => self.ppu.read(address),
             0xFF50 => todo!(),
             0xFF70..=0xFFFF => unreachable!(),
-            _ => 0xFF,
+            _ => 0,
         }
     }
 
@@ -118,8 +118,8 @@ impl Bus {
             0xFF0F => self.interrupts.write(address, value),
             0xFF10..=0xFF3F => self.audio.write(address, value),
             0xFF40..=0xFF4B => self.ppu.write(address, value),
-            0xFF50 => todo!(),
-            0xFF70..=0xFFFF => unreachable!(),
+            0xFF50 => (), // Boot ROM mapping
+            0xFF80..=0xFFFF => unreachable!(),
             _ => (),
         }
     }
