@@ -28,6 +28,7 @@ pub enum Flag {
     Carry,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Registers {
     pub a: u8,
     f: u8,

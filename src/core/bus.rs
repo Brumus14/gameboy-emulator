@@ -1,5 +1,5 @@
 use crate::core::{
-    apu::Apu, cartridge::Cartridge, interrupts::Interrupts, joypad::Joypad, ppu::Ppu,
+    audio::Apu, cartridge::Cartridge, graphics::Graphics, interrupts::Interrupts, joypad::Joypad,
     serial::Serial, timer::Timer,
 };
 
@@ -21,7 +21,7 @@ pub struct Bus {
     pub wram: [u8; 8192],
     pub hram: [u8; 127],
     pub cartridge: Option<Cartridge>,
-    pub ppu: Ppu,
+    pub graphics: Graphics,
     pub interrupts: Interrupts,
     pub joypad: Joypad,
     pub timer: Timer,
@@ -35,7 +35,7 @@ impl Bus {
             wram: [0; 8192],
             hram: [0; 127],
             cartridge: None,
-            ppu: Ppu::new(),
+            graphics: Graphics::new(),
             interrupts: Interrupts::new(),
             joypad: Joypad::new(),
             timer: Timer::new(),
@@ -53,7 +53,7 @@ impl Bus {
                     0
                 }
             }
-            0x8000..0xA000 => self.ppu.read(address),
+            0x8000..0xA000 => self.graphics.read(address),
             0xA000..0xC000 => {
                 if let Some(cartridge) = &mut self.cartridge {
                     cartridge.read(address)
@@ -63,7 +63,7 @@ impl Bus {
             }
             0xC000..0xE000 => self.wram[(address - 0xC000) as usize],
             0xE000..0xFE00 => self.wram[(address - 0xE000) as usize],
-            0xFE00..0xFEA0 => self.ppu.read(address),
+            0xFE00..0xFEA0 => self.graphics.read(address),
             0xFEA0..0xFF00 => 0xFF, // TODO: might be different
             0xFF00..0xFF80 => self.read_io(address),
             0xFF80..0xFFFF => self.hram[(address - 0xFF80) as usize],
@@ -78,7 +78,7 @@ impl Bus {
                     cartridge.write(address, value);
                 }
             }
-            0x8000..0xA000 => self.ppu.write(address, value),
+            0x8000..0xA000 => self.graphics.write(address, value),
             0xA000..0xC000 => {
                 if let Some(cartridge) = &mut self.cartridge {
                     cartridge.write(address, value)
@@ -86,7 +86,7 @@ impl Bus {
             }
             0xC000..0xE000 => self.wram[(address - 0xC000) as usize] = value,
             0xE000..0xFE00 => self.wram[(address - 0xE000) as usize] = value,
-            0xFE00..0xFEA0 => self.ppu.write(address, value),
+            0xFE00..0xFEA0 => self.graphics.write(address, value),
             0xFEA0..0xFF00 => (), // TODO: might be different
             0xFF00..0xFF80 => self.write_io(address, value),
             0xFF80..0xFFFF => self.hram[(address - 0xFF80) as usize] = value,
@@ -102,7 +102,7 @@ impl Bus {
             0xFF04..=0xFF07 => self.timer.read(address),
             0xFF0F => self.interrupts.read(address),
             0xFF10..=0xFF3F => self.audio.read(address),
-            0xFF40..=0xFF4B => self.ppu.read(address),
+            0xFF40..=0xFF4B => self.graphics.read(address),
             0xFF50 => todo!(),
             0xFF70..=0xFFFF => unreachable!(),
             _ => 0,
@@ -117,10 +117,21 @@ impl Bus {
             0xFF04..=0xFF07 => self.timer.write(address, value),
             0xFF0F => self.interrupts.write(address, value),
             0xFF10..=0xFF3F => self.audio.write(address, value),
-            0xFF40..=0xFF4B => self.ppu.write(address, value),
+            0xFF40..=0xFF45 => self.graphics.write(address, value),
+            0xFF46 => self.oam_dma_transfer(value),
+            0xFF47..=0xFF4B => self.graphics.write(address, value),
             0xFF50 => (), // Boot ROM mapping
             0xFF80..=0xFFFF => unreachable!(),
             _ => (),
+        }
+    }
+
+    fn oam_dma_transfer(&mut self, value: u8) {
+        let start = (value as u16) << 8;
+
+        for i in 0..160 {
+            let value = self.read(start + i);
+            self.write(0xFE00 + i, value);
         }
     }
 }

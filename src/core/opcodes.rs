@@ -214,3 +214,55 @@ pub fn get_cond(cond: Cond, registers: &Registers) -> bool {
         Cond::C => registers.get_flag(Flag::Carry),
     }
 }
+
+impl ToString for R8 {
+    fn to_string(&self) -> String {
+        match self {
+            R8::B => "b",
+            R8::C => "c",
+            R8::D => "d",
+            R8::E => "e",
+            R8::H => "h",
+            R8::L => "l",
+            R8::MemoryHL => "[hl]",
+            R8::A => "a",
+        }
+        .to_string()
+    }
+}
+
+impl ToString for R16 {
+    fn to_string(&self) -> String {
+        match self {
+            R16::BC => "bc",
+            R16::DE => "de",
+            R16::HL => "hl",
+            R16::SP => "sp",
+        }
+        .to_string()
+    }
+}
+
+impl ToString for R16stk {
+    fn to_string(&self) -> String {
+        match self {
+            R16stk::BC => "bc",
+            R16stk::DE => "de",
+            R16stk::HL => "hl",
+            R16stk::AF => "af",
+        }
+        .to_string()
+    }
+}
+
+impl ToString for R16mem {
+    fn to_string(&self) -> String {
+        match self {
+            R16mem::BC => "bc",
+            R16mem::DE => "de",
+            R16mem::HLI => "hl+",
+            R16mem::HLD => "hl-",
+        }
+        .to_string()
+    }
+}

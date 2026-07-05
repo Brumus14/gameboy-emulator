@@ -37,7 +37,7 @@ impl Timer {
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn cycle(&mut self) {
         self.tick_count += 1;
 
         if self.tick_count % 256 == 0 {

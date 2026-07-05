@@ -14,6 +14,13 @@ pub enum Condition {
     Carry,
 }
 
+#[derive(Debug)]
+pub struct CycleInfo {
+    pub bytes: [u8; 3],
+    pub opcode_length: u8,
+    pub registers: Registers,
+}
+
 pub struct Cpu {
     registers: Registers,
     interrupt_master_enable: bool,
@@ -34,9 +41,7 @@ impl Cpu {
     fn fetch(&mut self, bus: &mut Bus) -> u8 {
         let pc = self.registers.get_register16(Register16::PC);
         self.registers.set_register16(Register16::PC, pc + 1);
-        let v = bus.read(pc); // Remove
-        print!("    {:08b}", v);
-        v
+        bus.read(pc)
     }
 
     fn fetch_16(&mut self, bus: &mut Bus) -> u16 {
@@ -44,19 +49,26 @@ impl Cpu {
         (self.fetch(bus) as u16) | ((self.fetch(bus) as u16) << 8)
     }
 
-    pub fn cycle(&mut self, bus: &mut Bus) {
+    pub fn cycle(&mut self, bus: &mut Bus) -> CycleInfo {
+        let bytes = [
+            bus.read(self.registers.pc),
+            bus.read(self.registers.pc.wrapping_add(1)),
+            bus.read(self.registers.pc.wrapping_add(2)),
+        ];
+        let mut opcode_length = 1;
+
         if self.interrupt_master_enable_pending {
             self.interrupt_master_enable = true;
             self.interrupt_master_enable_pending = false;
         }
 
-        print!("{:04X}    |", self.registers.get_register16(Register16::PC));
         let opcode = self.fetch(bus);
 
         if opcode == 0b00000000 {
         } else if opcode & 0b11001111 == 0b00000001 {
             let r16 = decode_r16(parse_operand(opcode, 4, OperandType::R16));
             self.ld_r16_imm16(r16, bus);
+            opcode_length = 3;
         } else if opcode & 0b11001111 == 0b00000010 {
             let r16mem = decode_r16mem(parse_operand(opcode, 4, OperandType::R16mem));
             self.ld_r16mem_a(r16mem, bus);
@@ -65,6 +77,7 @@ impl Cpu {
             self.ld_a_r16mem(r16mem, bus);
         } else if opcode == 0b00001000 {
             self.ld_imm16_sp(bus);
+            opcode_length = 3;
         } else if opcode & 0b11001111 == 0b00000011 {
             let r16 = decode_r16(parse_operand(opcode, 4, OperandType::R16));
             self.inc_r16(r16);
@@ -83,6 +96,7 @@ impl Cpu {
         } else if opcode & 0b11000111 == 0b00000110 {
             let r8 = decode_r8(parse_operand(opcode, 3, OperandType::R8));
             self.ld_r8_imm8(r8, bus);
+            opcode_length = 2;
         } else if opcode == 0b00000111 {
             self.rlca();
         } else if opcode == 0b00001111 {
@@ -101,9 +115,11 @@ impl Cpu {
             self.ccf();
         } else if opcode == 0b00011000 {
             self.jr_imm8(bus);
+            opcode_length = 2;
         } else if opcode & 0b11100111 == 0b00100000 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.jr_cond_imm8(cond, bus);
+            opcode_length = 2;
         } else if opcode == 0b00010000 {
             todo!("stop")
         } else if opcode & 0b11100111 == 0b00100000 && opcode != 0b01110110 {
@@ -138,20 +154,28 @@ impl Cpu {
             self.or_a_r8(r8, bus);
         } else if opcode == 0b11000110 {
             self.add_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11001110 {
             self.adc_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11010110 {
             self.sub_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11011110 {
             self.sbc_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11100110 {
             self.and_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11101110 {
             self.xor_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11110110 {
             self.or_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11111110 {
             self.cp_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode & 0b11100111 == 0b11000000 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.ret_cond(cond, bus);
@@ -162,15 +186,19 @@ impl Cpu {
         } else if opcode & 0b11100111 == 0b11000010 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.jp_cond_imm16(cond, bus);
+            opcode_length = 3;
         } else if opcode == 0b11000011 {
             self.jp_imm16(bus);
+            opcode_length = 3;
         } else if opcode == 0b11101001 {
             self.jp_hl();
         } else if opcode & 0b11100111 == 0b11000100 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.call_cond_imm16(cond, bus);
+            opcode_length = 3;
         } else if opcode == 0b11001101 {
             self.call_imm16(bus);
+            opcode_length = 3;
         } else if opcode & 0b11000111 == 0b11000111 {
             let tgt3 = parse_operand(opcode, 3, OperandType::Tgt3);
             self.rst_tgt3(tgt3, bus);
@@ -224,18 +252,24 @@ impl Cpu {
             self.ldh_c_a(bus);
         } else if opcode == 0b11100000 {
             self.ldh_imm8_a(bus);
+            opcode_length = 2;
         } else if opcode == 0b11101010 {
             self.ld_imm16_a(bus);
+            opcode_length = 3;
         } else if opcode == 0b11110010 {
             self.ldh_a_c(bus);
         } else if opcode == 0b11110000 {
             self.ldh_a_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11111010 {
             self.ld_a_imm16(bus);
+            opcode_length = 3;
         } else if opcode == 0b11101000 {
             self.add_sp_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11111000 {
             self.ld_hl_sp_imm8(bus);
+            opcode_length = 2;
         } else if opcode == 0b11111001 {
             self.ld_sp_hl();
         } else if opcode == 0b11110011 {
@@ -244,9 +278,11 @@ impl Cpu {
             self.ei();
         }
 
-        println!();
-        self.registers.print();
-        println!();
+        CycleInfo {
+            bytes,
+            opcode_length,
+            registers: self.registers,
+        }
     }
 
     fn ld_r16_imm16(&mut self, r16: R16, bus: &mut Bus) {

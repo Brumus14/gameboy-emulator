@@ -1,6 +1,10 @@
 use std::{thread::sleep, time::Duration};
 
-use crate::core::{bus::Bus, cartridge::Cartridge, cpu::Cpu};
+use crate::core::{
+    bus::Bus,
+    cartridge::Cartridge,
+    cpu::{self, Cpu},
+};
 
 pub struct Gameboy {
     cpu: Cpu,
@@ -25,15 +29,20 @@ impl Gameboy {
         self.bus.cartridge = None;
     }
 
-    pub fn on(&mut self) {
-        loop {
-            self.cycle();
-            sleep(Duration::from_millis(100));
-        }
+    pub fn cycle(&mut self) -> CycleInfo {
+        let cpu_cycle_info = self.cpu.cycle(&mut self.bus);
+        self.bus.timer.cycle();
+        self.bus.graphics.cycle();
+
+        CycleInfo { cpu_cycle_info }
     }
 
-    fn cycle(&mut self) {
-        self.cpu.cycle(&mut self.bus);
-        self.bus.timer.tick();
+    pub fn get_pixels(&self) -> [u8; 144 * 160] {
+        self.bus.graphics.get_pixels()
     }
+}
+
+#[derive(Debug)]
+pub struct CycleInfo {
+    cpu_cycle_info: cpu::CycleInfo,
 }

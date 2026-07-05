@@ -1,13 +1,14 @@
-pub mod apu;
+pub mod audio;
 pub mod bus;
 pub mod cartridge;
 pub mod cpu;
+pub mod debug;
 pub mod gameboy;
+pub mod graphics;
 pub mod interrupts;
 pub mod joypad;
 pub mod mbc;
 pub mod opcodes;
-pub mod ppu;
 pub mod registers;
 pub mod serial;
 pub mod timer;

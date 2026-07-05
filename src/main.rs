@@ -1,18 +1,26 @@
-use glium::winit::event_loop::EventLoop;
+use std::{thread::sleep, time::Duration};
 
-use crate::frontend::app::App;
+use crate::{
+    core::{cartridge::Cartridge, gameboy::Gameboy},
+    frontend::Frontend,
+};
 
 mod core;
 mod frontend;
 
 fn main() {
-    // let mut gameboy = Gameboy::new();
-    // let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
-    //
-    // gameboy.load_cartridge(cartridge);
-    // gameboy.on();
+    let mut gameboy = Gameboy::new();
+    let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
 
-    let event_loop = EventLoop::builder().build().unwrap();
-    let mut app = App::new(&event_loop);
-    event_loop.run_app(&mut app).unwrap();
+    gameboy.load_cartridge(cartridge);
+
+    let mut frontend = Frontend::new();
+
+    while !frontend.should_close() {
+        let cycle_info = gameboy.cycle();
+        frontend.update_debug_info(cycle_info);
+        frontend.set_pixels(gameboy.get_pixels());
+        frontend.render();
+        sleep(Duration::from_millis(300));
+    }
 }
