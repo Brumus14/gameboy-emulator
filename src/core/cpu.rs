@@ -14,9 +14,9 @@ pub enum Condition {
     Carry,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct CycleInfo {
-    pub bytes: [u8; 3],
+    pub opcode_bytes: [u8; 3],
     pub opcode_length: u8,
     pub registers: Registers,
 }
@@ -50,7 +50,7 @@ impl Cpu {
     }
 
     pub fn cycle(&mut self, bus: &mut Bus) -> CycleInfo {
-        let bytes = [
+        let opcode_bytes = [
             bus.read(self.registers.pc),
             bus.read(self.registers.pc.wrapping_add(1)),
             bus.read(self.registers.pc.wrapping_add(2)),
@@ -151,7 +151,7 @@ impl Cpu {
             self.or_a_r8(r8, bus);
         } else if opcode & 0b11111000 == 0b10111000 {
             let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
-            self.or_a_r8(r8, bus);
+            self.cp_a_r8(r8, bus);
         } else if opcode == 0b11000110 {
             self.add_a_imm8(bus);
             opcode_length = 2;
@@ -279,7 +279,7 @@ impl Cpu {
         }
 
         CycleInfo {
-            bytes,
+            opcode_bytes,
             opcode_length,
             registers: self.registers,
         }

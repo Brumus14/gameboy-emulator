@@ -52,7 +52,6 @@ impl Graphics {
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
-        println!("{}", address);
         match address {
             0x8000..0xA000 => self.video_ram[(address - 0x8000) as usize] = value,
             0xFE00..0xFEA0 => self.object_attribute_memory[(address - 0xFE00) as usize] = value,

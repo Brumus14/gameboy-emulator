@@ -266,3 +266,15 @@ impl ToString for R16mem {
         .to_string()
     }
 }
+
+impl ToString for Cond {
+    fn to_string(&self) -> String {
+        match self {
+            Cond::NZ => "nz",
+            Cond::Z => "z",
+            Cond::NC => "nc",
+            Cond::C => "c",
+        }
+        .to_string()
+    }
+}

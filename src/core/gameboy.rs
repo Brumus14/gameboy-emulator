@@ -42,7 +42,7 @@ impl Gameboy {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct CycleInfo {
-    cpu_cycle_info: cpu::CycleInfo,
+    pub cpu_cycle_info: cpu::CycleInfo,
 }
