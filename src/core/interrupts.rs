@@ -29,7 +29,21 @@ impl Interrupts {
             let enabled = (self.enable >> i) & 1 == 1;
             let requested = (self.flag >> i) & 1 == 1;
 
-            if enabled && requested {}
+            self.flag &= !(1 << i);
+
+            if enabled && requested {
+                println!(
+                    "{}",
+                    match i {
+                        0 => "vblank",
+                        1 => "lcd",
+                        2 => "timer",
+                        3 => "serial",
+                        4 => "joypad",
+                        _ => unreachable!(),
+                    }
+                );
+            }
         }
     }
 }

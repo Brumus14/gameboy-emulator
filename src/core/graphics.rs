@@ -1,12 +1,13 @@
 pub struct Graphics {
+    dot_count: usize,
     pixels: [u8; 144 * 160],
     video_ram: [u8; 8192],
     object_attribute_memory: [u8; 160],
     lcdc: u8,
-    stat: u8,
+    pub stat: u8,
     scy: u8,
     scx: u8,
-    ly: u8,
+    pub ly: u8,
     lyc: u8,
     bgp: u8,
     obp0: u8,
@@ -16,6 +17,7 @@ pub struct Graphics {
 impl Graphics {
     pub fn new() -> Self {
         Self {
+            dot_count: 0,
             pixels: [0; 144 * 160],
             video_ram: [0; 8192],
             object_attribute_memory: [0; 160],
@@ -59,43 +61,63 @@ impl Graphics {
             0xFF41 => self.stat = value & 0b11111100,
             0xFF42 => self.scy = value,
             0xFF43 => self.scx = value,
+            0xFF44 => (),
             0xFF45 => self.lyc = value,
             0xFF46 => todo!(),
             0xFF47 => self.bgp = value,
             0xFF48 => self.obp0 = value,
             0xFF49 => self.obp1 = value,
-            0xFF4A => todo!(),
-            0xFF4B => todo!(),
+            0xFF4A => (),
+            0xFF4B => (),
             _ => unreachable!(),
         }
     }
 
     pub fn cycle(&mut self) {
+        self.dot_count += 1;
+
+        if self.dot_count < 456 {
+            return;
+        } else {
+            self.dot_count -= 456;
+        }
+
         let bg_address = if self.lcdc & 0b00001000 == 0 {
             0x9800
         } else {
             0x9C00
         };
 
-        for y in 0..144 {
-            let tile_y = y / 8;
-            let tile_row = y % 8;
+        let line = self.ly;
 
-            for x in 0..160 {
-                let tile_x = x / 8;
-                let tile_column = x % 8;
-
-                let index = self.read(bg_address + tile_x + tile_y * 32);
-                let left = self.read(0x8000 + (index as u16) * 16 + tile_row * 2);
-                let right = self.read(0x8000 + (index as u16) * 16 + tile_row * 2 + 1);
-
-                self.pixels[(x + y * 160) as usize] = (((left >> (8 - tile_column - 1)) & 1) << 1)
-                    | ((right >> (8 - tile_column - 1)) & 1);
-            }
+        if line >= 144 {
+            self.stat = (self.stat & 0b11111100) | 0b00000001;
+            self.ly = (line + 1) % 154;
+            return;
+        } else {
+            self.stat = (self.stat & 0b11111100) | 0b00000011;
         }
+
+        let tile_y = line / 8;
+        let tile_row = line % 8;
+
+        for x in 0..160 {
+            let tile_x = x / 8;
+            let tile_column = x % 8;
+
+            let index = self.read(bg_address + tile_x + (tile_y as u16) * 32);
+            let left = self.read(0x8000 + (index as u16) * 16 + (tile_row as u16) * 2);
+            let right = self.read(0x8000 + (index as u16) * 16 + (tile_row as u16) * 2 + 1);
+
+            self.pixels[(x + (line as u16) * 160) as usize] =
+                (((left >> (8 - tile_column - 1)) & 1) << 1)
+                    | ((right >> (8 - tile_column - 1)) & 1);
+        }
+
+        self.ly = (line + 1) % 154;
     }
 
-    pub fn get_pixels(&self) -> [u8; 144 * 160] {
+    pub fn pixels(&self) -> [u8; 144 * 160] {
         self.pixels
     }
 }

@@ -1,3 +1,5 @@
+use std::fs;
+
 use crate::core::{
     audio::Apu, cartridge::Cartridge, graphics::Graphics, interrupts::Interrupts, joypad::Joypad,
     serial::Serial, timer::Timer,
@@ -18,6 +20,8 @@ enum Region {
 }
 
 pub struct Bus {
+    pub boot_rom: [u8; 256],
+    boot_rom_mapped: bool,
     pub wram: [u8; 8192],
     pub hram: [u8; 127],
     pub cartridge: Option<Cartridge>,
@@ -32,6 +36,12 @@ pub struct Bus {
 impl Bus {
     pub fn new() -> Self {
         Self {
+            boot_rom: fs::read("res/rom/DMG_ROM.bin")
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+            boot_rom_mapped: true,
             wram: [0; 8192],
             hram: [0; 127],
             cartridge: None,
@@ -45,6 +55,10 @@ impl Bus {
     }
 
     pub fn read(&mut self, address: u16) -> u8 {
+        if self.boot_rom_mapped && address < 0x100 {
+            return self.boot_rom[address as usize];
+        }
+
         match address {
             0x0000..0x8000 => {
                 if let Some(cartridge) = &mut self.cartridge {
@@ -72,6 +86,11 @@ impl Bus {
     }
 
     pub fn write(&mut self, address: u16, value: u8) {
+        // Should this be removed?
+        if self.boot_rom_mapped && address < 0x100 {
+            return;
+        }
+
         match address {
             0x0000..0x8000 => {
                 if let Some(cartridge) = &mut self.cartridge {
@@ -103,7 +122,7 @@ impl Bus {
             0xFF0F => self.interrupts.read(address),
             0xFF10..=0xFF3F => self.audio.read(address),
             0xFF40..=0xFF4B => self.graphics.read(address),
-            0xFF50 => todo!(),
+            // 0xFF50 => ,
             0xFF70..=0xFFFF => unreachable!(),
             _ => 0,
         }
@@ -120,7 +139,7 @@ impl Bus {
             0xFF40..=0xFF45 => self.graphics.write(address, value),
             0xFF46 => self.oam_dma_transfer(value),
             0xFF47..=0xFF4B => self.graphics.write(address, value),
-            0xFF50 => (), // Boot ROM mapping
+            0xFF50 => self.boot_rom_mapped = false, // Boot ROM mapping
             0xFF80..=0xFFFF => unreachable!(),
             _ => (),
         }

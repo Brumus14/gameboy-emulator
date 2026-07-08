@@ -14,7 +14,7 @@ pub enum OperandType {
     Tgt3,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum R8 {
     B,
     C,

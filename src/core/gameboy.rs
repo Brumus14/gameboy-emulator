@@ -1,9 +1,10 @@
-use std::{thread::sleep, time::Duration};
+use std::{fs, thread::sleep, time::Duration};
 
 use crate::core::{
     bus::Bus,
     cartridge::Cartridge,
     cpu::{self, Cpu},
+    registers::Registers,
 };
 
 pub struct Gameboy {
@@ -38,7 +39,19 @@ impl Gameboy {
     }
 
     pub fn get_pixels(&self) -> [u8; 144 * 160] {
-        self.bus.graphics.get_pixels()
+        self.bus.graphics.pixels()
+    }
+
+    pub fn get_registers(&self) -> Registers {
+        self.cpu.registers()
+    }
+
+    pub fn get_next_opcode(&mut self) -> ([u8; 3], u16) {
+        self.cpu.get_next_opcode(&mut self.bus)
+    }
+
+    pub fn frame_ready(&self) -> bool {
+        self.bus.graphics.stat & 0b00000011 == 0b00000001
     }
 }
 

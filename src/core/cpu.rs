@@ -17,7 +17,9 @@ pub enum Condition {
 #[derive(Debug, Clone, Copy)]
 pub struct CycleInfo {
     pub opcode_bytes: [u8; 3],
-    pub opcode_length: u8,
+    pub opcode_address: u16,
+    pub next_opcode_bytes: [u8; 3],
+    pub next_opcode_address: u16,
     pub registers: Registers,
 }
 
@@ -25,7 +27,6 @@ pub struct Cpu {
     registers: Registers,
     interrupt_master_enable: bool,
     interrupt_master_enable_pending: bool,
-    interrupt_enable_register: u8,
 }
 
 impl Cpu {
@@ -34,8 +35,11 @@ impl Cpu {
             registers: Registers::new(),
             interrupt_master_enable: false,
             interrupt_master_enable_pending: false,
-            interrupt_enable_register: 0,
         }
+    }
+
+    pub fn registers(&self) -> Registers {
+        self.registers
     }
 
     fn fetch(&mut self, bus: &mut Bus) -> u8 {
@@ -49,17 +53,27 @@ impl Cpu {
         (self.fetch(bus) as u16) | ((self.fetch(bus) as u16) << 8)
     }
 
-    pub fn cycle(&mut self, bus: &mut Bus) -> CycleInfo {
+    pub fn get_next_opcode(&self, bus: &mut Bus) -> ([u8; 3], u16) {
         let opcode_bytes = [
             bus.read(self.registers.pc),
             bus.read(self.registers.pc.wrapping_add(1)),
             bus.read(self.registers.pc.wrapping_add(2)),
         ];
-        let mut opcode_length = 1;
+        let opcode_address = self.registers.pc;
+
+        (opcode_bytes, opcode_address)
+    }
+
+    pub fn cycle(&mut self, bus: &mut Bus) -> CycleInfo {
+        let (opcode_bytes, opcode_address) = self.get_next_opcode(bus);
 
         if self.interrupt_master_enable_pending {
             self.interrupt_master_enable = true;
             self.interrupt_master_enable_pending = false;
+        }
+
+        if self.interrupt_master_enable {
+            bus.interrupts.handle();
         }
 
         let opcode = self.fetch(bus);
@@ -68,7 +82,6 @@ impl Cpu {
         } else if opcode & 0b11001111 == 0b00000001 {
             let r16 = decode_r16(parse_operand(opcode, 4, OperandType::R16));
             self.ld_r16_imm16(r16, bus);
-            opcode_length = 3;
         } else if opcode & 0b11001111 == 0b00000010 {
             let r16mem = decode_r16mem(parse_operand(opcode, 4, OperandType::R16mem));
             self.ld_r16mem_a(r16mem, bus);
@@ -77,7 +90,6 @@ impl Cpu {
             self.ld_a_r16mem(r16mem, bus);
         } else if opcode == 0b00001000 {
             self.ld_imm16_sp(bus);
-            opcode_length = 3;
         } else if opcode & 0b11001111 == 0b00000011 {
             let r16 = decode_r16(parse_operand(opcode, 4, OperandType::R16));
             self.inc_r16(r16);
@@ -96,7 +108,6 @@ impl Cpu {
         } else if opcode & 0b11000111 == 0b00000110 {
             let r8 = decode_r8(parse_operand(opcode, 3, OperandType::R8));
             self.ld_r8_imm8(r8, bus);
-            opcode_length = 2;
         } else if opcode == 0b00000111 {
             self.rlca();
         } else if opcode == 0b00001111 {
@@ -115,16 +126,14 @@ impl Cpu {
             self.ccf();
         } else if opcode == 0b00011000 {
             self.jr_imm8(bus);
-            opcode_length = 2;
         } else if opcode & 0b11100111 == 0b00100000 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.jr_cond_imm8(cond, bus);
-            opcode_length = 2;
         } else if opcode == 0b00010000 {
             todo!("stop")
-        } else if opcode & 0b11100111 == 0b00100000 && opcode != 0b01110110 {
-            let r8a = decode_r8(parse_operand(opcode, 0, OperandType::R8));
-            let r8b = decode_r8(parse_operand(opcode, 3, OperandType::R8));
+        } else if opcode & 0b11000000 == 0b01000000 && opcode != 0b01110110 {
+            let r8a = decode_r8(parse_operand(opcode, 3, OperandType::R8));
+            let r8b = decode_r8(parse_operand(opcode, 0, OperandType::R8));
             self.ld_r8_r8(r8a, r8b, bus);
         } else if opcode == 0b01110110 {
             todo!("halt")
@@ -154,28 +163,20 @@ impl Cpu {
             self.cp_a_r8(r8, bus);
         } else if opcode == 0b11000110 {
             self.add_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11001110 {
             self.adc_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11010110 {
             self.sub_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11011110 {
             self.sbc_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11100110 {
             self.and_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11101110 {
             self.xor_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11110110 {
             self.or_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11111110 {
             self.cp_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode & 0b11100111 == 0b11000000 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.ret_cond(cond, bus);
@@ -186,19 +187,15 @@ impl Cpu {
         } else if opcode & 0b11100111 == 0b11000010 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.jp_cond_imm16(cond, bus);
-            opcode_length = 3;
         } else if opcode == 0b11000011 {
             self.jp_imm16(bus);
-            opcode_length = 3;
         } else if opcode == 0b11101001 {
             self.jp_hl();
         } else if opcode & 0b11100111 == 0b11000100 {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.call_cond_imm16(cond, bus);
-            opcode_length = 3;
         } else if opcode == 0b11001101 {
             self.call_imm16(bus);
-            opcode_length = 3;
         } else if opcode & 0b11000111 == 0b11000111 {
             let tgt3 = parse_operand(opcode, 3, OperandType::Tgt3);
             self.rst_tgt3(tgt3, bus);
@@ -252,24 +249,18 @@ impl Cpu {
             self.ldh_c_a(bus);
         } else if opcode == 0b11100000 {
             self.ldh_imm8_a(bus);
-            opcode_length = 2;
         } else if opcode == 0b11101010 {
             self.ld_imm16_a(bus);
-            opcode_length = 3;
         } else if opcode == 0b11110010 {
             self.ldh_a_c(bus);
         } else if opcode == 0b11110000 {
             self.ldh_a_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11111010 {
             self.ld_a_imm16(bus);
-            opcode_length = 3;
         } else if opcode == 0b11101000 {
             self.add_sp_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11111000 {
             self.ld_hl_sp_imm8(bus);
-            opcode_length = 2;
         } else if opcode == 0b11111001 {
             self.ld_sp_hl();
         } else if opcode == 0b11110011 {
@@ -278,9 +269,13 @@ impl Cpu {
             self.ei();
         }
 
+        let (next_opcode_bytes, next_opcode_address) = self.get_next_opcode(bus);
+
         CycleInfo {
             opcode_bytes,
-            opcode_length,
+            opcode_address,
+            next_opcode_bytes,
+            next_opcode_address,
             registers: self.registers,
         }
     }
@@ -293,11 +288,35 @@ impl Cpu {
     fn ld_r16mem_a(&mut self, r16mem: R16mem, bus: &mut Bus) {
         let address = get_r16mem(r16mem, &self.registers);
         bus.write(address, self.registers.a);
+
+        match r16mem {
+            R16mem::HLI => self.registers.set_register16(
+                Register16::HL,
+                self.registers.get_register16(Register16::HL) + 1,
+            ),
+            R16mem::HLD => self.registers.set_register16(
+                Register16::HL,
+                self.registers.get_register16(Register16::HL) - 1,
+            ),
+            _ => (),
+        }
     }
 
     fn ld_a_r16mem(&mut self, r16mem: R16mem, bus: &mut Bus) {
         let address = get_r16mem(r16mem, &self.registers);
         self.registers.a = bus.read(address);
+
+        match r16mem {
+            R16mem::HLI => self.registers.set_register16(
+                Register16::HL,
+                self.registers.get_register16(Register16::HL) + 1,
+            ),
+            R16mem::HLD => self.registers.set_register16(
+                Register16::HL,
+                self.registers.get_register16(Register16::HL) - 1,
+            ),
+            _ => (),
+        }
     }
 
     fn ld_imm16_sp(&mut self, bus: &mut Bus) {
@@ -481,8 +500,8 @@ impl Cpu {
     }
 
     fn jr_imm8(&mut self, bus: &mut Bus) {
-        let pc = self.registers.get_register16(Register16::PC);
         let offset = self.fetch(bus) as i8 as i16;
+        let pc = self.registers.get_register16(Register16::PC);
 
         self.registers
             .set_register16(Register16::PC, pc.wrapping_add_signed(offset));
@@ -491,6 +510,9 @@ impl Cpu {
     fn jr_cond_imm8(&mut self, cond: Cond, bus: &mut Bus) {
         if get_cond(cond, &self.registers) {
             self.jr_imm8(bus);
+        } else {
+            let pc = self.registers.get_register16(Register16::PC);
+            self.registers.set_register16(Register16::PC, pc + 1);
         }
     }
 
@@ -763,6 +785,9 @@ impl Cpu {
     fn ret_cond(&mut self, cond: Cond, bus: &mut Bus) {
         if get_cond(cond, &self.registers) {
             self.ret(bus);
+        } else {
+            let pc = self.registers.get_register16(Register16::PC);
+            self.registers.set_register16(Register16::PC, pc + 2);
         }
     }
 
@@ -787,6 +812,9 @@ impl Cpu {
     fn jp_cond_imm16(&mut self, cond: Cond, bus: &mut Bus) {
         if get_cond(cond, &self.registers) {
             self.jp_imm16(bus);
+        } else {
+            let pc = self.registers.get_register16(Register16::PC);
+            self.registers.set_register16(Register16::PC, pc + 2);
         }
     }
 
@@ -803,6 +831,9 @@ impl Cpu {
     fn call_cond_imm16(&mut self, cond: Cond, bus: &mut Bus) {
         if get_cond(cond, &self.registers) {
             self.call_imm16(bus);
+        } else {
+            let pc = self.registers.get_register16(Register16::PC);
+            self.registers.set_register16(Register16::PC, pc + 2);
         }
     }
 

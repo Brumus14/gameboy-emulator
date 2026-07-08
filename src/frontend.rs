@@ -5,7 +5,11 @@ use raylib::{
     prelude::*,
 };
 
-use crate::core::{debug::Debug, gameboy::CycleInfo, registers::Flag};
+use crate::core::{
+    debug::Debug,
+    gameboy::CycleInfo,
+    registers::{Flag, Registers},
+};
 
 pub enum Command {
     Pause,
@@ -18,7 +22,10 @@ pub struct Frontend {
     thread: RaylibThread,
     font: Font,
     framebuffer: Image,
+
     opcode: String,
+    next_opcode: String,
+
     af: String,
     bc: String,
     de: String,
@@ -34,7 +41,12 @@ pub struct Frontend {
 }
 
 impl Frontend {
-    pub fn new() -> Self {
+    pub fn new(
+        pixels: [u8; 144 * 160],
+        registers: &Registers,
+        next_opcode_bytes: [u8; 3],
+        next_opcode_address: u16,
+    ) -> Self {
         let (mut raylib, thread) = raylib::init()
             .size(1280, 720)
             .log_level(TraceLogLevel::LOG_NONE)
@@ -55,12 +67,15 @@ impl Frontend {
             Image::from_raw(raw)
         };
 
-        Self {
+        let mut frontend = Self {
             raylib,
             thread,
             font,
             framebuffer,
+
             opcode: "".to_string(),
+            next_opcode: "".to_string(),
+
             af: "".to_string(),
             bc: "".to_string(),
             de: "".to_string(),
@@ -75,7 +90,7 @@ impl Frontend {
                 7.0 * width,
                 3.0 * height,
             ),
-            paused: false,
+            paused: true,
 
             step_button: Rectangle::new(
                 800.0 + 9.0 * width,
@@ -83,7 +98,15 @@ impl Frontend {
                 6.0 * width,
                 3.0 * height,
             ),
-        }
+        };
+
+        frontend.trace_registers(registers);
+        frontend.set_pixels(pixels);
+
+        let next_opcode = Debug::opcode_to_string(next_opcode_bytes).to_uppercase();
+        frontend.next_opcode = format!("{:04X}: {}", next_opcode_address, next_opcode);
+
+        frontend
     }
 
     pub fn set_pixels(&mut self, pixels: [u8; 144 * 160]) {
@@ -102,30 +125,30 @@ impl Frontend {
         }
     }
 
-    pub fn update_debug_info(&mut self, cycle_info: CycleInfo) {
+    pub fn trace_registers(&mut self, registers: &Registers) {
+        self.af = format!("AF: {:02X} {:02X}", registers.a, registers.f);
+        self.bc = format!("BC: {:02X} {:02X}", registers.b, registers.c);
+        self.de = format!("DE: {:02X} {:02X}", registers.d, registers.e);
+        self.hl = format!("HL: {:02X} {:02X}", registers.h, registers.l);
+        self.sp = format!("SP: {:04X}", registers.sp);
+        self.pc = format!("PC: {:04X}", registers.pc);
+
+        self.flags = format!("ZNHC: {:04b}", registers.f >> 4);
+    }
+
+    pub fn trace_cycle_info(&mut self, cycle_info: CycleInfo) {
         let cpu_cycle_info = cycle_info.cpu_cycle_info;
 
-        self.opcode = Debug::get_opcode_string(cpu_cycle_info).to_uppercase();
-        self.af = format!(
-            "AF: {:02X} {:02X}",
-            cpu_cycle_info.registers.a, cpu_cycle_info.registers.f
-        );
-        self.bc = format!(
-            "BC: {:02X} {:02X}",
-            cpu_cycle_info.registers.b, cpu_cycle_info.registers.c
-        );
-        self.de = format!(
-            "DE: {:02X} {:02X}",
-            cpu_cycle_info.registers.d, cpu_cycle_info.registers.e
-        );
-        self.hl = format!(
-            "HL: {:02X} {:02X}",
-            cpu_cycle_info.registers.h, cpu_cycle_info.registers.l
-        );
-        self.sp = format!("SP: {:04X}", cpu_cycle_info.registers.sp);
-        self.pc = format!("PC: {:04X}", cpu_cycle_info.registers.pc);
+        let opcode = Debug::opcode_to_string(cpu_cycle_info.opcode_bytes).to_uppercase();
+        self.opcode = format!("{:04X}: {}", cpu_cycle_info.opcode_address, opcode);
 
-        self.flags = format!("ZNHC: {:04b}", cpu_cycle_info.registers.f >> 4);
+        let next_opcode = Debug::opcode_to_string(cpu_cycle_info.next_opcode_bytes).to_uppercase();
+        self.next_opcode = format!(
+            "{:04X}: {}",
+            cpu_cycle_info.next_opcode_address, next_opcode
+        );
+
+        self.trace_registers(&cpu_cycle_info.registers);
     }
 
     pub fn update(&mut self) -> Vec<Command> {
@@ -219,15 +242,16 @@ impl Frontend {
         );
         draw.draw_text_ex(
             &self.font,
-            &self.af,
+            &self.next_opcode,
             Vector2::new(800.0 + width, 2.0 * height),
             24.0,
             0.0,
             Color::WHITE,
         );
+
         draw.draw_text_ex(
             &self.font,
-            &self.bc,
+            &self.af,
             Vector2::new(800.0 + width, 3.0 * height),
             24.0,
             0.0,
@@ -235,7 +259,7 @@ impl Frontend {
         );
         draw.draw_text_ex(
             &self.font,
-            &self.de,
+            &self.bc,
             Vector2::new(800.0 + width, 4.0 * height),
             24.0,
             0.0,
@@ -243,7 +267,7 @@ impl Frontend {
         );
         draw.draw_text_ex(
             &self.font,
-            &self.hl,
+            &self.de,
             Vector2::new(800.0 + width, 5.0 * height),
             24.0,
             0.0,
@@ -251,7 +275,7 @@ impl Frontend {
         );
         draw.draw_text_ex(
             &self.font,
-            &self.sp,
+            &self.hl,
             Vector2::new(800.0 + width, 6.0 * height),
             24.0,
             0.0,
@@ -259,8 +283,16 @@ impl Frontend {
         );
         draw.draw_text_ex(
             &self.font,
-            &self.pc,
+            &self.sp,
             Vector2::new(800.0 + width, 7.0 * height),
+            24.0,
+            0.0,
+            Color::WHITE,
+        );
+        draw.draw_text_ex(
+            &self.font,
+            &self.pc,
+            Vector2::new(800.0 + width, 8.0 * height),
             24.0,
             0.0,
             Color::WHITE,
@@ -269,15 +301,13 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.flags,
-            Vector2::new(800.0 + width, 8.0 * height),
+            Vector2::new(800.0 + width, 9.0 * height),
             24.0,
             0.0,
             Color::WHITE,
         );
 
         draw.draw_texture_ex(&texture, Vector2::new(0.0, 0.0), 0.0, 5.0, Color::WHITE);
-
-        sleep(Duration::from_millis(100));
     }
 
     pub fn should_close(&self) -> bool {
