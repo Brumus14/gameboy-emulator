@@ -1,6 +1,6 @@
 pub struct Interrupts {
     pub enable: u8,
-    flag: u8,
+    pub flag: u8,
 }
 
 impl Interrupts {
@@ -21,29 +21,6 @@ impl Interrupts {
             0xFFFF => self.enable = value,
             0xFF0F => self.flag = value,
             _ => unreachable!(),
-        }
-    }
-
-    pub fn handle(&mut self) {
-        for i in 0..5 {
-            let enabled = (self.enable >> i) & 1 == 1;
-            let requested = (self.flag >> i) & 1 == 1;
-
-            self.flag &= !(1 << i);
-
-            if enabled && requested {
-                println!(
-                    "{}",
-                    match i {
-                        0 => "vblank",
-                        1 => "lcd",
-                        2 => "timer",
-                        3 => "serial",
-                        4 => "joypad",
-                        _ => unreachable!(),
-                    }
-                );
-            }
         }
     }
 }

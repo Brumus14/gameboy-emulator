@@ -7,7 +7,7 @@ pub struct Graphics {
     pub stat: u8,
     scy: u8,
     scx: u8,
-    pub ly: u8,
+    ly: u8,
     lyc: u8,
     bgp: u8,
     obp0: u8,
@@ -98,20 +98,28 @@ impl Graphics {
             self.stat = (self.stat & 0b11111100) | 0b00000011;
         }
 
+        // let tile_y = line.wrapping_add(self.scy) / 8;
+        // let tile_row = line.wrapping_add(self.scy) % 8;
         let tile_y = line / 8;
         let tile_row = line % 8;
 
-        for x in 0..160 {
-            let tile_x = x / 8;
-            let tile_column = x % 8;
+        for x in 0..160u8 {
+            let tile_x = x.wrapping_add(self.scx) / 8;
+            let tile_column = x.wrapping_add(self.scx) % 8;
 
-            let index = self.read(bg_address + tile_x + (tile_y as u16) * 32);
-            let left = self.read(0x8000 + (index as u16) * 16 + (tile_row as u16) * 2);
-            let right = self.read(0x8000 + (index as u16) * 16 + (tile_row as u16) * 2 + 1);
+            let index = self.read(bg_address + (tile_x as u16) + (tile_y as u16) * 32);
 
-            self.pixels[(x + (line as u16) * 160) as usize] =
-                (((left >> (8 - tile_column - 1)) & 1) << 1)
-                    | ((right >> (8 - tile_column - 1)) & 1);
+            let tile_address = if (self.lcdc >> 4) & 1 == 1 {
+                0x8000 + (index as u16) * 16
+            } else {
+                0x9000u16.wrapping_add_signed((index as i8 as i16) * 16)
+            };
+            let tile_row_address = tile_address + (tile_row as u16) * 2;
+
+            let right = (self.read(tile_row_address) >> (8 - tile_column - 1)) & 1;
+            let left = (self.read(tile_row_address + 1) >> (8 - tile_column - 1)) & 1;
+
+            self.pixels[((x as u16) + (line as u16) * 160) as usize] = (left << 1) | right;
         }
 
         self.ly = (line + 1) % 154;

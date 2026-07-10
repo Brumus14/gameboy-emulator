@@ -14,6 +14,7 @@ use crate::core::{
 pub enum Command {
     Pause,
     Unpause,
+    TogglePause,
     Step(usize),
 }
 
@@ -21,7 +22,12 @@ pub struct Frontend {
     raylib: RaylibHandle,
     thread: RaylibThread,
     font: Font,
-    framebuffer: Image,
+    font_width: f32,
+    font_height: f32,
+    framebuffer_texture: Texture2D,
+    framebuffer: [u8; 144 * 160],
+
+    mouse_left_down: bool,
 
     opcode: String,
     next_opcode: String,
@@ -35,17 +41,15 @@ pub struct Frontend {
     flags: String,
 
     pause_button: Rectangle,
-    paused: bool,
-
     step_button: Rectangle,
 }
 
 impl Frontend {
     pub fn new(
         pixels: [u8; 144 * 160],
-        registers: &Registers,
         next_opcode_bytes: [u8; 3],
         next_opcode_address: u16,
+        registers: &Registers,
     ) -> Self {
         let (mut raylib, thread) = raylib::init()
             .size(1280, 720)
@@ -62,16 +66,31 @@ impl Frontend {
             y: height,
         } = font.measure_text(" ", 24.0, 0.0);
 
-        let framebuffer = unsafe {
-            let raw = GenImageColor(160, 144, Color::BLACK);
+        let framebuffer_image = unsafe {
+            let mut raw = GenImageColor(160, 144, Color::BLACK);
+            raw.format = PixelFormat::PIXELFORMAT_UNCOMPRESSED_GRAYSCALE as i32;
             Image::from_raw(raw)
         };
+
+        let framebuffer = raylib
+            .load_texture_from_image(&thread, &framebuffer_image)
+            .unwrap();
+
+        let Vector2 {
+            x: font_width,
+            y: font_height,
+        } = font.measure_text(" ", 24.0, 0.0);
 
         let mut frontend = Self {
             raylib,
             thread,
             font,
-            framebuffer,
+            font_width,
+            font_height,
+            framebuffer_texture: framebuffer,
+            framebuffer: [0; 144 * 160],
+
+            mouse_left_down: false,
 
             opcode: "".to_string(),
             next_opcode: "".to_string(),
@@ -90,7 +109,6 @@ impl Frontend {
                 7.0 * width,
                 3.0 * height,
             ),
-            paused: true,
 
             step_button: Rectangle::new(
                 800.0 + 9.0 * width,
@@ -113,16 +131,20 @@ impl Frontend {
         for y in 0..144 {
             for x in 0..160 {
                 let colour = match pixels[x + y * 160] {
-                    0 => Color::new(255, 255, 255, 255),
-                    1 => Color::new(170, 170, 170, 255),
-                    2 => Color::new(85, 85, 85, 255),
-                    3 => Color::new(0, 0, 0, 255),
+                    0 => 255,
+                    1 => 170,
+                    2 => 85,
+                    3 => 0,
                     _ => unreachable!(),
                 };
 
-                self.framebuffer.draw_pixel(x as i32, y as i32, colour);
+                self.framebuffer[y * 160 + x] = colour;
             }
         }
+
+        self.framebuffer_texture
+            .update_texture(&self.framebuffer)
+            .unwrap();
     }
 
     pub fn trace_registers(&mut self, registers: &Registers) {
@@ -154,21 +176,18 @@ impl Frontend {
     pub fn update(&mut self) -> Vec<Command> {
         let mut commands = Vec::new();
 
-        if self
+        let mouse_left_down = self
             .raylib
-            .is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT)
-        {
+            .is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT);
+
+        let mouse_left_pressed = !self.mouse_left_down && mouse_left_down;
+
+        if mouse_left_pressed {
             if self
                 .pause_button
                 .check_collision_point_rec(self.raylib.get_mouse_position())
             {
-                self.paused = !self.paused;
-
-                if self.paused {
-                    commands.push(Command::Pause);
-                } else {
-                    commands.push(Command::Unpause);
-                }
+                commands.push(Command::TogglePause);
             } else if self
                 .step_button
                 .check_collision_point_rec(self.raylib.get_mouse_position())
@@ -177,20 +196,12 @@ impl Frontend {
             }
         }
 
+        self.mouse_left_down = mouse_left_down;
+
         commands
     }
 
     pub fn render(&mut self) {
-        let texture = self
-            .raylib
-            .load_texture_from_image(&self.thread, &self.framebuffer)
-            .unwrap();
-
-        let Vector2 {
-            x: width,
-            y: height,
-        } = self.font.measure_text(" ", 24.0, 0.0);
-
         let mut draw = self.raylib.begin_drawing(&self.thread);
         draw.clear_background(Color::BLACK);
 
@@ -205,7 +216,10 @@ impl Frontend {
         draw.draw_text_pro(
             &self.font,
             "PAUSE",
-            Vector2::new(self.pause_button.x + width, self.pause_button.y + height),
+            Vector2::new(
+                self.pause_button.x + self.font_width,
+                self.pause_button.y + self.font_height,
+            ),
             Vector2::ZERO,
             0.0,
             24.0,
@@ -224,7 +238,10 @@ impl Frontend {
         draw.draw_text_pro(
             &self.font,
             "STEP",
-            Vector2::new(self.step_button.x + width, self.step_button.y + height),
+            Vector2::new(
+                self.step_button.x + self.font_width,
+                self.step_button.y + self.font_height,
+            ),
             Vector2::ZERO,
             0.0,
             24.0,
@@ -235,7 +252,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.opcode,
-            Vector2::new(800.0 + width, height),
+            Vector2::new(800.0 + self.font_width, self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -243,7 +260,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.next_opcode,
-            Vector2::new(800.0 + width, 2.0 * height),
+            Vector2::new(800.0 + self.font_width, 2.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -252,7 +269,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.af,
-            Vector2::new(800.0 + width, 3.0 * height),
+            Vector2::new(800.0 + self.font_width, 3.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -260,7 +277,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.bc,
-            Vector2::new(800.0 + width, 4.0 * height),
+            Vector2::new(800.0 + self.font_width, 4.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -268,7 +285,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.de,
-            Vector2::new(800.0 + width, 5.0 * height),
+            Vector2::new(800.0 + self.font_width, 5.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -276,7 +293,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.hl,
-            Vector2::new(800.0 + width, 6.0 * height),
+            Vector2::new(800.0 + self.font_width, 6.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -284,7 +301,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.sp,
-            Vector2::new(800.0 + width, 7.0 * height),
+            Vector2::new(800.0 + self.font_width, 7.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -292,7 +309,7 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.pc,
-            Vector2::new(800.0 + width, 8.0 * height),
+            Vector2::new(800.0 + self.font_width, 8.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
@@ -301,13 +318,19 @@ impl Frontend {
         draw.draw_text_ex(
             &self.font,
             &self.flags,
-            Vector2::new(800.0 + width, 9.0 * height),
+            Vector2::new(800.0 + self.font_width, 9.0 * self.font_height),
             24.0,
             0.0,
             Color::WHITE,
         );
 
-        draw.draw_texture_ex(&texture, Vector2::new(0.0, 0.0), 0.0, 5.0, Color::WHITE);
+        draw.draw_texture_ex(
+            &self.framebuffer_texture,
+            Vector2::new(0.0, 0.0),
+            0.0,
+            5.0,
+            Color::WHITE,
+        );
     }
 
     pub fn should_close(&self) -> bool {

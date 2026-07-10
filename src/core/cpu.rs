@@ -53,6 +53,47 @@ impl Cpu {
         (self.fetch(bus) as u16) | ((self.fetch(bus) as u16) << 8)
     }
 
+    fn handle_interrupts(&mut self, bus: &mut Bus) {
+        println!("inter");
+        for i in 0..5 {
+            let enabled = (bus.interrupts.enable >> i) & 1 == 1;
+            let requested = (bus.interrupts.flag >> i) & 1 == 1;
+
+            bus.interrupts.flag &= !(1 << i);
+            self.interrupt_master_enable = false;
+
+            if enabled && requested {
+                // Push PC to stack
+                let pc = self.registers.get_register16(Register16::PC);
+                let mut sp = self.registers.get_register16(Register16::SP);
+
+                sp = sp.wrapping_sub(1);
+                bus.write(sp, (pc >> 8) as u8);
+
+                sp = sp.wrapping_sub(1);
+                bus.write(sp, (pc & 0xFF) as u8);
+
+                self.registers.set_register16(Register16::SP, sp);
+
+                // Jump to interrupt service routine
+                let address = 0x40 + i * 0x8;
+                self.registers.set_register16(Register16::PC, address);
+
+                println!(
+                    "{}",
+                    match i {
+                        0 => "vblank",
+                        1 => "lcd",
+                        2 => "timer",
+                        3 => "serial",
+                        4 => "joypad",
+                        _ => unreachable!(),
+                    }
+                );
+            }
+        }
+    }
+
     pub fn get_next_opcode(&self, bus: &mut Bus) -> ([u8; 3], u16) {
         let opcode_bytes = [
             bus.read(self.registers.pc),
@@ -73,7 +114,7 @@ impl Cpu {
         }
 
         if self.interrupt_master_enable {
-            bus.interrupts.handle();
+            self.handle_interrupts(bus);
         }
 
         let opcode = self.fetch(bus);
