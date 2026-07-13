@@ -98,10 +98,8 @@ impl Graphics {
             self.stat = (self.stat & 0b11111100) | 0b00000011;
         }
 
-        // let tile_y = line.wrapping_add(self.scy) / 8;
-        // let tile_row = line.wrapping_add(self.scy) % 8;
-        let tile_y = line / 8;
-        let tile_row = line % 8;
+        let tile_y = line.wrapping_add(self.scy) / 8;
+        let tile_row = line.wrapping_add(self.scy) % 8;
 
         for x in 0..160u8 {
             let tile_x = x.wrapping_add(self.scx) / 8;
@@ -118,8 +116,11 @@ impl Graphics {
 
             let right = (self.read(tile_row_address) >> (8 - tile_column - 1)) & 1;
             let left = (self.read(tile_row_address + 1) >> (8 - tile_column - 1)) & 1;
+            let palette_index = (left << 1) | right;
 
-            self.pixels[((x as u16) + (line as u16) * 160) as usize] = (left << 1) | right;
+            let value = (self.read(0xFF47) >> (palette_index * 2)) & 0b11;
+
+            self.pixels[((x as u16) + (line as u16) * 160) as usize] = value;
         }
 
         self.ly = (line + 1) % 154;

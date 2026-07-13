@@ -16,6 +16,8 @@ use crate::{
 mod core;
 mod frontend;
 
+const FRAME_DURATION: Duration = Duration::from_micros(16740);
+
 enum CycleState {
     Unpaused,
     Paused,
@@ -37,6 +39,9 @@ fn main() {
         opcode_address,
         &gameboy.get_registers(),
     );
+
+    let mut frame_rendered = false;
+    let mut frame_render_time = Instant::now();
 
     while !frontend.should_close() {
         let commands = frontend.update();
@@ -66,18 +71,32 @@ fn main() {
             CycleState::Unpaused => {
                 let mut cycle_info: Option<CycleInfo> = None;
 
-                while !gameboy.frame_ready() {
+                while !gameboy.frame_ready() || frame_rendered {
+                    if !gameboy.frame_ready() && frame_rendered {
+                        frame_rendered = false;
+                    }
+
                     cycle_info = Some(gameboy.cycle());
 
-                    // if gameboy.get_next_opcode().1 == 0x40 {
-                    //     cycle_state = CycleState::Paused;
-                    //     break;
-                    // }
+                    // if gameboy.get_next_opcode().1 & 0xF000 >= 0x8000 {
+                    if gameboy.get_next_opcode().1 == 0x150 {
+                        cycle_state = CycleState::Paused;
+                        break;
+                    }
                 }
 
                 if let Some(cycle_info) = cycle_info {
                     frontend.trace_cycle_info(cycle_info);
                     frontend.set_pixels(gameboy.get_pixels());
+
+                    let duration = Instant::now() - frame_render_time;
+
+                    if duration < FRAME_DURATION {
+                        sleep(FRAME_DURATION - duration);
+                    }
+
+                    frame_rendered = true;
+                    frame_render_time = Instant::now();
                 }
             }
             CycleState::Step(ref mut remaining_steps) => {

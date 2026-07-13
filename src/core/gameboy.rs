@@ -32,8 +32,11 @@ impl Gameboy {
 
     pub fn cycle(&mut self) -> CycleInfo {
         let cpu_cycle_info = self.cpu.cycle(&mut self.bus);
-        self.bus.timer.cycle();
-        self.bus.graphics.cycle();
+
+        for _ in 0..cpu_cycle_info.cycle_count {
+            self.bus.timer.cycle();
+            self.bus.graphics.cycle();
+        }
 
         CycleInfo { cpu_cycle_info }
     }

@@ -237,9 +237,9 @@ impl Debug {
             let imm8 = bytes[1] as i8;
 
             if imm8 >= 0 {
-                format!("jr hl, sp, {:02X}", imm8)
+                format!("ld hl, sp, {:02X}", imm8)
             } else {
-                format!("jr hl, sp, -{:02X}", imm8.abs())
+                format!("ld hl, sp, -{:02X}", imm8.abs())
             }
         } else if bytes[0] == 0b11111001 {
             "ldh sp, hl".to_string()
