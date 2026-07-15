@@ -25,12 +25,14 @@ enum CycleState {
     Step(usize),
 }
 
+// 2
+
 fn main() {
     let mut gameboy = Gameboy::new();
 
     // let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
-
-    let cartridge = Cartridge::from_file("./res/rom/blarggtests/cpu_instrs/cpu_instrs.gb").unwrap();
+    let cartridge =
+        Cartridge::from_file("./res/rom/blarggtests/interrupt_time/interrupt_time.gb").unwrap();
     gameboy.load_cartridge(cartridge);
 
     let mut cycle_state = CycleState::Paused;
@@ -85,8 +87,13 @@ fn main() {
 
                     cycle_info = Some(gameboy.cycle());
 
+                    let opcode = gameboy.get_next_opcode();
+
                     // if gameboy.get_next_opcode().1 & 0xF000 >= 0x8000 {
-                    // if gameboy.get_next_opcode().1 == 0x1D5 {
+                    // if opcode.1 == 0xCE65 {
+                    // if gameboy.get_next_opcode().0[0] == 0b00000001
+                    //     && gameboy.get_next_opcode().0[1] == 0
+                    //     && gameboy.get_next_opcode().0[2] == 0x12 {
                     //     cycle_state = CycleState::Paused;
                     //     break;
                     // }

@@ -153,7 +153,7 @@ impl Graphics {
             self.ly = (self.ly + 1) % 154;
             self.x = 0;
 
-            if self.ly == 143 {
+            if self.ly == 144 {
                 interrupt = true;
             }
         }

@@ -44,7 +44,13 @@ impl Gameboy {
     pub fn cycle(&mut self) -> CycleInfo {
         let cpu_cycle_info = self.cpu.cycle(&mut self.bus);
 
-        for _ in 0..cpu_cycle_info.cycle_count * 4 {
+        let c_cycle_count = if let Some(cycle_info) = cpu_cycle_info {
+            cycle_info.cycle_count
+        } else {
+            1
+        } * 4;
+
+        for _ in 0..c_cycle_count {
             let timer_interrupt = self.bus.timer.cycle();
 
             if timer_interrupt {
@@ -80,5 +86,5 @@ impl Gameboy {
 
 #[derive(Debug, Clone, Copy)]
 pub struct CycleInfo {
-    pub cpu_cycle_info: cpu::CycleInfo,
+    pub cpu_cycle_info: Option<cpu::CycleInfo>,
 }

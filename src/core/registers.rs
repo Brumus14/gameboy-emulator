@@ -74,7 +74,7 @@ impl Registers {
     pub fn set_register8(&mut self, register: Register8, value: u8) {
         match register {
             Register8::A => self.a = value,
-            Register8::F => self.f = value,
+            Register8::F => self.f = value & 0xF0,
             Register8::B => self.b = value,
             Register8::C => self.c = value,
             Register8::D => self.d = value,
@@ -99,7 +99,7 @@ impl Registers {
         match register {
             Register16::AF => {
                 self.a = (value >> 8) as u8;
-                self.f = (value & 0xFF) as u8;
+                self.f = (value & 0xF0) as u8;
             }
             Register16::BC => {
                 self.b = (value >> 8) as u8;

@@ -25,6 +25,7 @@ pub struct CycleInfo {
 }
 
 pub struct Cpu {
+    halted: bool,
     registers: Registers,
     interrupt_master_enable: bool,
     interrupt_master_enable_pending: bool,
@@ -35,6 +36,7 @@ pub struct Cpu {
 impl Cpu {
     pub fn new() -> Self {
         Self {
+            halted: false,
             registers: Registers::new(),
             interrupt_master_enable: false,
             interrupt_master_enable_pending: false,
@@ -122,7 +124,15 @@ impl Cpu {
     }
 
     // TODO: Rename from cycle as can be over multiple clock cycles
-    pub fn cycle(&mut self, bus: &mut Bus) -> CycleInfo {
+    pub fn cycle(&mut self, bus: &mut Bus) -> Option<CycleInfo> {
+        if self.halted {
+            if bus.interrupts.enable & bus.interrupts.flag & 0b00011111 != 0 {
+                self.halted = false;
+            } else {
+                return None;
+            }
+        }
+
         let (opcode_bytes, opcode_address) = self.get_next_opcode(bus);
         let mut cycle_count = 0;
 
@@ -336,14 +346,14 @@ impl Cpu {
 
         let (next_opcode_bytes, next_opcode_address) = self.get_next_opcode(bus);
 
-        CycleInfo {
+        Some(CycleInfo {
             cycle_count,
             opcode_bytes,
             opcode_address,
             next_opcode_bytes,
             next_opcode_address,
             registers: self.registers,
-        }
+        })
     }
 
     fn nop(&self) -> u8 {
@@ -452,7 +462,7 @@ impl Cpu {
         self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
 
-        1
+        if let R8::MemoryHL = r8 { 3 } else { 1 }
     }
 
     fn dec_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -460,19 +470,20 @@ impl Cpu {
         let result = value.wrapping_sub(1);
         set_r8(r8, result, &mut self.registers, bus);
 
-        let half_carry = value & 0xF == 0;
+        let half_carry = (value & 0xF) == 0;
 
         self.registers.set_flag(Flag::Zero, result == 0);
         self.registers.set_flag(Flag::Negative, true);
         self.registers.set_flag(Flag::HalfCarry, half_carry);
 
-        1
+        if let R8::MemoryHL = r8 { 3 } else { 1 }
     }
 
     fn ld_r8_imm8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
         let value = self.fetch(bus);
         set_r8(r8, value, &mut self.registers, bus);
-        2
+
+        if let R8::MemoryHL = r8 { 3 } else { 2 }
     }
 
     fn rlca(&mut self) -> u8 {
@@ -560,7 +571,7 @@ impl Cpu {
         } else {
             let mut adjustment: u8 = 0;
 
-            if half_carry || a & 0xF > 0x9 {
+            if half_carry || (a & 0xF) > 0x9 {
                 adjustment += 0x6;
             }
 
@@ -643,15 +654,21 @@ impl Cpu {
         1 // TODO: This needs changing
     }
 
+    // Excludes ld [hl], [hl]
     fn ld_r8_r8(&mut self, r8a: R8, r8b: R8, bus: &mut Bus) -> u8 {
         let value = get_r8(r8b, &self.registers, bus);
         set_r8(r8a, value, &mut self.registers, bus);
-        1
+
+        if matches!(r8a, R8::MemoryHL) || matches!(r8b, R8::MemoryHL) {
+            2
+        } else {
+            1
+        }
     }
 
-    // TODO: Implement this
     fn halt(&mut self) -> u8 {
-        1 // TODO: This needs fixing
+        self.halted = true;
+        0
     }
 
     fn add_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -669,7 +686,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn adc_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -689,7 +706,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn sub_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -708,7 +725,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn sbc_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -728,7 +745,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn and_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -743,7 +760,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, true);
         self.registers.set_flag(Flag::Carry, false);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn xor_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -758,7 +775,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn or_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -773,7 +790,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn cp_a_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -790,7 +807,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, half_carry);
         self.registers.set_flag(Flag::Carry, carry);
 
-        1
+        if let R8::MemoryHL = r8 { 2 } else { 1 }
     }
 
     fn add_a_imm8(&mut self, bus: &mut Bus) -> u8 {
@@ -937,8 +954,6 @@ impl Cpu {
             self.ret(bus);
             5
         } else {
-            let pc = self.registers.get_register16(Register16::PC);
-            self.registers.set_register16(Register16::PC, pc + 2);
             2
         }
     }
@@ -1074,7 +1089,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, value >> 7 == 1);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn rrc_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -1087,7 +1102,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, value & 1 == 1);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn rl_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -1106,7 +1121,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, carry);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn rr_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -1125,22 +1140,21 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, carry);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn sla_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
         let value = get_r8(r8, &self.registers, bus);
         let result = value << 1;
-        let carry = value >> 7 == 1;
 
         set_r8(r8, result, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
         self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
-        self.registers.set_flag(Flag::Carry, carry);
+        self.registers.set_flag(Flag::Carry, value >> 7 == 1);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn sra_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -1148,7 +1162,7 @@ impl Cpu {
         let mut result = value >> 1;
 
         if value >> 7 == 1 {
-            result |= 0b10000000
+            result |= 1 << 7;
         }
 
         set_r8(r8, result, &mut self.registers, bus);
@@ -1158,7 +1172,7 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, value & 1 == 1);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn swap_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
@@ -1171,20 +1185,20 @@ impl Cpu {
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, false);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn srl_r8(&mut self, r8: R8, bus: &mut Bus) -> u8 {
         let value = get_r8(r8, &self.registers, bus);
         let result = value >> 1;
-        set_r8(r8, value, &mut self.registers, bus);
+        set_r8(r8, result, &mut self.registers, bus);
 
         self.registers.set_flag(Flag::Zero, result == 0);
         self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, false);
         self.registers.set_flag(Flag::Carry, value & 1 == 1);
 
-        2
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn bit_b3_r8(&mut self, b3: u8, r8: R8, bus: &mut Bus) -> u8 {
@@ -1195,21 +1209,23 @@ impl Cpu {
         self.registers.set_flag(Flag::Negative, false);
         self.registers.set_flag(Flag::HalfCarry, true);
 
-        2
+        if let R8::MemoryHL = r8 { 3 } else { 2 }
     }
 
     fn res_b3_r8(&mut self, b3: u8, r8: R8, bus: &mut Bus) -> u8 {
         let value = get_r8(r8, &self.registers, bus);
         let result = value & !(1 << b3);
         set_r8(r8, result, &mut self.registers, bus);
-        2
+
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn set_b3_r8(&mut self, b3: u8, r8: R8, bus: &mut Bus) -> u8 {
         let value = get_r8(r8, &self.registers, bus);
         let result = value | (1 << b3);
         set_r8(r8, result, &mut self.registers, bus);
-        2
+
+        if let R8::MemoryHL = r8 { 4 } else { 2 }
     }
 
     fn ldh_c_a(&mut self, bus: &mut Bus) -> u8 {
@@ -1261,8 +1277,8 @@ impl Cpu {
 
         self.registers.set_register16(Register16::SP, result);
 
-        let half_carry = ((sp as u8) & 0xF) + ((value as u8) & 0xF) > 0xF;
-        let carry = sp + (value as u8 as u16) > 0xFF;
+        let half_carry = (sp & 0xF) + ((value as u8 as u16) & 0xF) > 0xF;
+        let carry = (sp & 0xFF) + ((value as u8 as u16) & 0xFF) > 0xFF;
 
         self.registers.set_flag(Flag::Zero, false);
         self.registers.set_flag(Flag::Negative, false);

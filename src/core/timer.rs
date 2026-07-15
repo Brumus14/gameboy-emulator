@@ -45,14 +45,14 @@ impl Timer {
             self.div = self.div.wrapping_add(1); // Is this correct?
         }
 
-        let enabled = self.tac & 0b00000100 == 0b00000100;
+        let enabled = (self.tac >> 2) & 1 == 1;
         let frequency = match self.tac & 0b00000011 {
             0b00 => 256,
             0b01 => 4,
             0b10 => 16,
             0b11 => 64,
             _ => unreachable!(),
-        };
+        } * 4;
 
         if enabled && self.tick_count % frequency == 0 {
             if self.tima == 0xFF {

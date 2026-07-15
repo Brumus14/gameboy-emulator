@@ -224,18 +224,19 @@ impl Frontend {
     }
 
     pub fn trace_cycle_info(&mut self, cycle_info: CycleInfo) {
-        let cpu_cycle_info = cycle_info.cpu_cycle_info;
+        if let Some(cpu_cycle_info) = cycle_info.cpu_cycle_info {
+            let opcode = Debug::opcode_to_string(cpu_cycle_info.opcode_bytes).to_uppercase();
+            self.opcode = format!("{:04X}: {}", cpu_cycle_info.opcode_address, opcode);
 
-        let opcode = Debug::opcode_to_string(cpu_cycle_info.opcode_bytes).to_uppercase();
-        self.opcode = format!("{:04X}: {}", cpu_cycle_info.opcode_address, opcode);
+            let next_opcode =
+                Debug::opcode_to_string(cpu_cycle_info.next_opcode_bytes).to_uppercase();
+            self.next_opcode = format!(
+                "{:04X}: {}",
+                cpu_cycle_info.next_opcode_address, next_opcode
+            );
 
-        let next_opcode = Debug::opcode_to_string(cpu_cycle_info.next_opcode_bytes).to_uppercase();
-        self.next_opcode = format!(
-            "{:04X}: {}",
-            cpu_cycle_info.next_opcode_address, next_opcode
-        );
-
-        self.trace_registers(&cpu_cycle_info.registers);
+            self.trace_registers(&cpu_cycle_info.registers);
+        }
     }
 
     pub fn update(&mut self) -> Vec<Command> {
