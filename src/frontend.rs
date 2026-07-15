@@ -11,10 +11,13 @@ use crate::core::{
     registers::{Flag, Registers},
 };
 
+const STEP_COUNT_INPUT_MAX_LENGTH: usize = 9;
+
 pub enum Command {
     Pause,
     Unpause,
     TogglePause,
+    Restart,
     Step(usize),
 }
 
@@ -40,8 +43,12 @@ pub struct Frontend {
     pc: String,
     flags: String,
 
+    step_count_input: String,
+
     pause_button: Rectangle,
+    restart_button: Rectangle,
     step_button: Rectangle,
+    step_count_box: Rectangle,
 }
 
 impl Frontend {
@@ -60,11 +67,6 @@ impl Frontend {
         let font = raylib
             .load_font(&thread, "res/font/PublicPixel.ttf")
             .unwrap();
-
-        let Vector2 {
-            x: width,
-            y: height,
-        } = font.measure_text(" ", 24.0, 0.0);
 
         let framebuffer_image = unsafe {
             let mut raw = GenImageColor(160, 144, Color::BLACK);
@@ -103,28 +105,91 @@ impl Frontend {
             pc: "".to_string(),
             flags: "".to_string(),
 
-            pause_button: Rectangle::new(
-                800.0 + width,
-                720.0 - 4.0 * height,
-                7.0 * width,
-                3.0 * height,
-            ),
+            step_count_input: "".to_string(),
 
-            step_button: Rectangle::new(
-                800.0 + 9.0 * width,
-                720.0 - 4.0 * height,
-                6.0 * width,
-                3.0 * height,
-            ),
+            pause_button: Rectangle::new(0.0, 0.0, 0.0, 0.0),
+            restart_button: Rectangle::new(0.0, 0.0, 0.0, 0.0),
+            step_button: Rectangle::new(0.0, 0.0, 0.0, 0.0),
+            step_count_box: Rectangle::new(0.0, 0.0, 0.0, 0.0),
         };
 
-        frontend.trace_registers(registers);
-        frontend.set_pixels(pixels);
-
-        let next_opcode = Debug::opcode_to_string(next_opcode_bytes).to_uppercase();
-        frontend.next_opcode = format!("{:04X}: {}", next_opcode_address, next_opcode);
+        frontend.initialise(pixels, next_opcode_bytes, next_opcode_address, registers);
 
         frontend
+    }
+
+    pub fn initialise(
+        &mut self,
+        pixels: [u8; 144 * 160],
+        next_opcode_bytes: [u8; 3],
+        next_opcode_address: u16,
+        registers: &Registers,
+    ) {
+        let framebuffer_image = unsafe {
+            let mut raw = GenImageColor(160, 144, Color::BLACK);
+            raw.format = PixelFormat::PIXELFORMAT_UNCOMPRESSED_GRAYSCALE as i32;
+            Image::from_raw(raw)
+        };
+
+        let framebuffer = self
+            .raylib
+            .load_texture_from_image(&self.thread, &framebuffer_image)
+            .unwrap();
+
+        self.framebuffer_texture = framebuffer;
+        self.framebuffer = [0; 144 * 160];
+
+        self.mouse_left_down = false;
+
+        self.opcode = "".to_string();
+        self.next_opcode = "".to_string();
+
+        self.af = "".to_string();
+        self.bc = "".to_string();
+        self.de = "".to_string();
+        self.hl = "".to_string();
+        self.sp = "".to_string();
+        self.pc = "".to_string();
+        self.flags = "".to_string();
+
+        self.step_count_input = "1".to_string();
+
+        let width = self.font_width;
+        let height = self.font_height;
+
+        self.pause_button = Rectangle::new(
+            800.0 + width,
+            720.0 - 4.0 * height,
+            7.0 * width,
+            3.0 * height,
+        );
+
+        self.restart_button = Rectangle::new(
+            800.0 + 9.0 * width,
+            720.0 - 4.0 * height,
+            9.0 * width,
+            3.0 * height,
+        );
+
+        self.step_button = Rectangle::new(
+            800.0 + 1.0 * width,
+            720.0 - 8.0 * height,
+            6.0 * width,
+            3.0 * height,
+        );
+
+        self.step_count_box = Rectangle::new(
+            800.0 + 8.0 * width,
+            720.0 - 8.0 * height,
+            11.0 * width,
+            3.0 * height,
+        );
+
+        self.trace_registers(registers);
+        self.set_pixels(pixels);
+
+        let next_opcode = Debug::opcode_to_string(next_opcode_bytes).to_uppercase();
+        self.next_opcode = format!("{:04X}: {}", next_opcode_address, next_opcode);
     }
 
     pub fn set_pixels(&mut self, pixels: [u8; 144 * 160]) {
@@ -189,10 +254,39 @@ impl Frontend {
             {
                 commands.push(Command::TogglePause);
             } else if self
+                .restart_button
+                .check_collision_point_rec(self.raylib.get_mouse_position())
+            {
+                commands.push(Command::Restart);
+            } else if self
                 .step_button
                 .check_collision_point_rec(self.raylib.get_mouse_position())
             {
-                commands.push(Command::Step(1));
+                if let Ok(c) = self.step_count_input.parse::<usize>() {
+                    commands.push(Command::Step(c));
+                }
+            }
+        }
+
+        if self
+            .step_count_box
+            .check_collision_point_rec(self.raylib.get_mouse_position())
+        {
+            if let Some(c) = self.raylib.get_char_pressed() {
+                if c.is_numeric()
+                    && self.step_count_input.len() < STEP_COUNT_INPUT_MAX_LENGTH
+                    && !(self.step_count_input.len() == 0 && c == '0')
+                {
+                    self.step_count_input.push(c);
+                }
+            }
+
+            if self.raylib.is_key_pressed(KeyboardKey::KEY_BACKSPACE)
+                || self
+                    .raylib
+                    .is_key_pressed_repeat(KeyboardKey::KEY_BACKSPACE)
+            {
+                self.step_count_input.pop();
             }
         }
 
@@ -228,6 +322,28 @@ impl Frontend {
         );
 
         draw.draw_rectangle(
+            self.restart_button.x as i32,
+            self.restart_button.y as i32,
+            self.restart_button.width as i32,
+            self.restart_button.height as i32,
+            Color::WHITE,
+        );
+
+        draw.draw_text_pro(
+            &self.font,
+            "RESTART",
+            Vector2::new(
+                self.restart_button.x + self.font_width,
+                self.restart_button.y + self.font_height,
+            ),
+            Vector2::ZERO,
+            0.0,
+            24.0,
+            0.0,
+            Color::BLACK,
+        );
+
+        draw.draw_rectangle(
             self.step_button.x as i32,
             self.step_button.y as i32,
             self.step_button.width as i32,
@@ -241,6 +357,28 @@ impl Frontend {
             Vector2::new(
                 self.step_button.x + self.font_width,
                 self.step_button.y + self.font_height,
+            ),
+            Vector2::ZERO,
+            0.0,
+            24.0,
+            0.0,
+            Color::BLACK,
+        );
+
+        draw.draw_rectangle(
+            self.step_count_box.x as i32,
+            self.step_count_box.y as i32,
+            self.step_count_box.width as i32,
+            self.step_count_box.height as i32,
+            Color::WHITE,
+        );
+
+        draw.draw_text_pro(
+            &self.font,
+            self.step_count_input.as_str(),
+            Vector2::new(
+                self.step_count_box.x + self.font_width,
+                self.step_count_box.y + self.font_height,
             ),
             Vector2::ZERO,
             0.0,

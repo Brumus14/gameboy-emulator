@@ -22,6 +22,16 @@ impl Gameboy {
         }
     }
 
+    pub fn restart(&mut self) {
+        let cartridge = self.bus.cartridge.take();
+
+        self.cpu = Cpu::new();
+        self.bus = Bus::new();
+        self.cycle_count = 0;
+
+        self.bus.cartridge = cartridge;
+    }
+
     pub fn load_cartridge(&mut self, cartridge: Cartridge) {
         self.bus.cartridge = Some(cartridge);
     }
@@ -30,12 +40,22 @@ impl Gameboy {
         self.bus.cartridge = None;
     }
 
+    // TODO: Should be cycling simultaneously
     pub fn cycle(&mut self) -> CycleInfo {
         let cpu_cycle_info = self.cpu.cycle(&mut self.bus);
 
-        for _ in 0..cpu_cycle_info.cycle_count {
-            self.bus.timer.cycle();
-            self.bus.graphics.cycle();
+        for _ in 0..cpu_cycle_info.cycle_count * 4 {
+            let timer_interrupt = self.bus.timer.cycle();
+
+            if timer_interrupt {
+                self.bus.interrupts.flag |= 1 << 2;
+            }
+
+            let graphics_interrupt = self.bus.graphics.cycle();
+
+            if graphics_interrupt {
+                self.bus.interrupts.flag |= 1;
+            }
         }
 
         CycleInfo { cpu_cycle_info }
@@ -54,7 +74,7 @@ impl Gameboy {
     }
 
     pub fn frame_ready(&self) -> bool {
-        self.bus.graphics.stat & 0b00000011 == 0b00000001
+        self.bus.graphics.get_mode() == 1
     }
 }
 

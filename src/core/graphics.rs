@@ -1,5 +1,7 @@
+use std::time::Instant;
+
 pub struct Graphics {
-    dot_count: usize,
+    dot_count: u16,
     pixels: [u8; 144 * 160],
     video_ram: [u8; 8192],
     object_attribute_memory: [u8; 160],
@@ -12,6 +14,9 @@ pub struct Graphics {
     bgp: u8,
     obp0: u8,
     obp1: u8,
+    wy: u8,
+    wx: u8,
+    x: u8,
 }
 
 impl Graphics {
@@ -30,6 +35,9 @@ impl Graphics {
             bgp: 0,
             obp0: 0,
             obp1: 0,
+            wy: 0,
+            wx: 0,
+            x: 0,
         }
     }
 
@@ -43,12 +51,11 @@ impl Graphics {
             0xFF43 => self.scx,
             0xFF44 => self.ly,
             0xFF45 => self.lyc,
-            0xFF46 => todo!(),
             0xFF47 => self.bgp,
             0xFF48 => self.obp0,
             0xFF49 => self.obp1,
-            0xFF4A => todo!(),
-            0xFF4B => todo!(),
+            0xFF4A => self.wy,
+            0xFF4B => self.wx,
             _ => unreachable!(),
         }
     }
@@ -63,67 +70,101 @@ impl Graphics {
             0xFF43 => self.scx = value,
             0xFF44 => (),
             0xFF45 => self.lyc = value,
-            0xFF46 => todo!(),
             0xFF47 => self.bgp = value,
             0xFF48 => self.obp0 = value,
             0xFF49 => self.obp1 = value,
-            0xFF4A => (),
-            0xFF4B => (),
+            0xFF4A => self.wy = value,
+            0xFF4B => self.wx = value,
             _ => unreachable!(),
         }
     }
 
-    pub fn cycle(&mut self) {
-        self.dot_count += 1;
+    pub fn get_mode(&self) -> u8 {
+        self.stat & 0b00000011
+    }
 
-        if self.dot_count < 456 {
+    fn set_mode(&mut self, mode: u8) {
+        self.stat = (self.stat & 0b11111100) | (mode & 0b00000011);
+    }
+
+    fn draw_pixel(&mut self) {
+        if self.lcdc & 1 == 0 {
+            self.pixels[((self.x as u16) + (self.ly as u16) * 160) as usize] = 0;
             return;
-        } else {
-            self.dot_count -= 456;
         }
 
-        let bg_address = if self.lcdc & 0b00001000 == 0 {
-            0x9800
-        } else {
+        let tile_y = self.ly.wrapping_add(self.scy) / 8;
+        let tile_row = self.ly.wrapping_add(self.scy) % 8;
+
+        let tile_x = self.x.wrapping_add(self.scx) / 8;
+        let tile_column = self.x.wrapping_add(self.scx) % 8;
+
+        let bg_address = if (self.lcdc >> 3) & 1 == 1 {
             0x9C00
+        } else {
+            0x9800
         };
 
-        let line = self.ly;
+        let index = self.read(bg_address + (tile_x as u16) + (tile_y as u16) * 32);
 
-        if line >= 144 {
-            self.stat = (self.stat & 0b11111100) | 0b00000001;
-            self.ly = (line + 1) % 154;
-            return;
+        let tile_address = if (self.lcdc >> 4) & 1 == 1 {
+            0x8000 + (index as u16) * 16
         } else {
-            self.stat = (self.stat & 0b11111100) | 0b00000011;
+            0x9000u16.wrapping_add_signed((index as i8 as i16) * 16)
+        };
+        let tile_row_address = tile_address + (tile_row as u16) * 2;
+
+        let low = (self.read(tile_row_address) >> (8 - tile_column - 1)) & 1;
+        let high = (self.read(tile_row_address + 1) >> (8 - tile_column - 1)) & 1;
+        let palette_index = (high << 1) | low;
+
+        let value = (self.read(0xFF47) >> (palette_index * 2)) & 0b11;
+
+        self.pixels[((self.x as u16) + (self.ly as u16) * 160) as usize] = value;
+    }
+
+    // Return true if should timer interrupt
+    pub fn cycle(&mut self) -> bool {
+        let mut interrupt = false;
+        let scroll_penalty = (self.scx % 8) as u16;
+
+        if self.ly < 144 {
+            if self.dot_count == 0 {
+                self.set_mode(2);
+            } else if self.dot_count == 80 {
+                self.set_mode(3);
+            } else if self.dot_count >= 92 + scroll_penalty && self.get_mode() != 0 {
+                self.draw_pixel();
+
+                if self.x == 159 {
+                    self.set_mode(0);
+                } else {
+                    self.x += 1;
+                }
+            }
+        } else if self.ly == 144 && self.dot_count == 0 {
+            self.set_mode(1);
         }
 
-        let tile_y = line.wrapping_add(self.scy) / 8;
-        let tile_row = line.wrapping_add(self.scy) % 8;
+        self.dot_count += 1;
 
-        for x in 0..160u8 {
-            let tile_x = x.wrapping_add(self.scx) / 8;
-            let tile_column = x.wrapping_add(self.scx) % 8;
+        if self.dot_count == 456 {
+            self.dot_count -= 456;
+            self.ly = (self.ly + 1) % 154;
+            self.x = 0;
 
-            let index = self.read(bg_address + (tile_x as u16) + (tile_y as u16) * 32);
-
-            let tile_address = if (self.lcdc >> 4) & 1 == 1 {
-                0x8000 + (index as u16) * 16
-            } else {
-                0x9000u16.wrapping_add_signed((index as i8 as i16) * 16)
-            };
-            let tile_row_address = tile_address + (tile_row as u16) * 2;
-
-            let right = (self.read(tile_row_address) >> (8 - tile_column - 1)) & 1;
-            let left = (self.read(tile_row_address + 1) >> (8 - tile_column - 1)) & 1;
-            let palette_index = (left << 1) | right;
-
-            let value = (self.read(0xFF47) >> (palette_index * 2)) & 0b11;
-
-            self.pixels[((x as u16) + (line as u16) * 160) as usize] = value;
+            if self.ly == 143 {
+                interrupt = true;
+            }
         }
 
-        self.ly = (line + 1) % 154;
+        if self.lyc == self.ly {
+            self.stat |= 0b00000100;
+        } else {
+            self.stat &= 0b11111011;
+        }
+
+        interrupt
     }
 
     pub fn pixels(&self) -> [u8; 144 * 160] {

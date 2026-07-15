@@ -56,15 +56,25 @@ impl Cpu {
         (self.fetch(bus) as u16) | ((self.fetch(bus) as u16) << 8)
     }
 
-    fn handle_interrupts(&mut self, bus: &mut Bus) {
-        for i in 0..5 {
+    fn handle_interrupts(&mut self, bus: &mut Bus) -> u8 {
+        if ((bus.graphics.stat >> 3) & 1 == 1 && (bus.graphics.stat & 0b00000011) == 0b00000000)
+            || ((bus.graphics.stat >> 4) & 1 == 1 && (bus.graphics.stat & 0b00000011) == 0b00000001)
+            || ((bus.graphics.stat >> 5) & 1 == 1 && (bus.graphics.stat & 0b00000011) == 0b00000010)
+            || ((bus.graphics.stat >> 6) & 1 == 1 && (bus.graphics.stat >> 2) & 1 == 1)
+        {
+            bus.interrupts.flag |= 1 << 1;
+        }
+
+        let mut cycle_count = 0;
+
+        for i in 0..=4 {
             let enabled = (bus.interrupts.enable >> i) & 1 == 1;
             let requested = (bus.interrupts.flag >> i) & 1 == 1;
 
-            bus.interrupts.flag &= !(1 << i);
-            self.interrupt_master_enable = false;
-
             if enabled && requested {
+                bus.interrupts.flag &= !(1 << i);
+                self.interrupt_master_enable = false;
+
                 // Push PC to stack
                 let pc = self.registers.get_register16(Register16::PC);
                 let mut sp = self.registers.get_register16(Register16::SP);
@@ -81,19 +91,23 @@ impl Cpu {
                 let address = 0x40 + i * 0x8;
                 self.registers.set_register16(Register16::PC, address);
 
-                println!(
-                    "{}",
-                    match i {
-                        0 => "vblank",
-                        1 => "lcd",
-                        2 => "timer",
-                        3 => "serial",
-                        4 => "joypad",
-                        _ => unreachable!(),
-                    }
-                );
+                cycle_count += 5;
+
+                // println!(
+                //     "{}",
+                //     match i {
+                //         0 => "vblank",
+                //         1 => "lcd",
+                //         2 => "timer",
+                //         3 => "serial",
+                //         4 => "joypad",
+                //         _ => unreachable!(),
+                //     }
+                // );
             }
         }
+
+        cycle_count
     }
 
     pub fn get_next_opcode(&self, bus: &mut Bus) -> ([u8; 3], u16) {
@@ -110,6 +124,7 @@ impl Cpu {
     // TODO: Rename from cycle as can be over multiple clock cycles
     pub fn cycle(&mut self, bus: &mut Bus) -> CycleInfo {
         let (opcode_bytes, opcode_address) = self.get_next_opcode(bus);
+        let mut cycle_count = 0;
 
         // TODO: Would this be better at the end of function
         if self.interrupt_master_enable_pending {
@@ -118,12 +133,12 @@ impl Cpu {
         }
 
         if self.interrupt_master_enable {
-            self.handle_interrupts(bus);
+            cycle_count += self.handle_interrupts(bus);
         }
 
         let opcode = self.fetch(bus);
 
-        let cycle_count = if opcode == 0b00000000 {
+        cycle_count += if opcode == 0b00000000 {
             self.nop()
         } else if opcode & 0b11001111 == 0b00000001 {
             let r16 = decode_r16(parse_operand(opcode, 4, OperandType::R16));
@@ -176,13 +191,13 @@ impl Cpu {
             let cond = decode_cond(parse_operand(opcode, 3, OperandType::Cond));
             self.jr_cond_imm8(cond, bus)
         } else if opcode == 0b00010000 {
-            todo!("stop")
+            self.stop(bus)
         } else if opcode & 0b11000000 == 0b01000000 && opcode != 0b01110110 {
             let r8a = decode_r8(parse_operand(opcode, 3, OperandType::R8));
             let r8b = decode_r8(parse_operand(opcode, 0, OperandType::R8));
             self.ld_r8_r8(r8a, r8b, bus)
         } else if opcode == 0b01110110 {
-            todo!("halt")
+            self.halt()
         } else if opcode & 0b11111000 == 0b10000000 {
             let r8 = decode_r8(parse_operand(opcode, 0, OperandType::R8));
             self.add_a_r8(r8, bus)
@@ -246,10 +261,10 @@ impl Cpu {
             let tgt3 = parse_operand(opcode, 3, OperandType::Tgt3);
             self.rst_tgt3(tgt3, bus)
         } else if opcode & 0b11001111 == 0b11000001 {
-            let r16stk = decode_r16stk(parse_operand(opcode, 3, OperandType::R16stk));
+            let r16stk = decode_r16stk(parse_operand(opcode, 4, OperandType::R16stk));
             self.pop_r16stk(r16stk, bus)
         } else if opcode & 0b11001111 == 0b11000101 {
-            let r16stk = decode_r16stk(parse_operand(opcode, 3, OperandType::R16stk));
+            let r16stk = decode_r16stk(parse_operand(opcode, 4, OperandType::R16stk));
             self.push_r16stk(r16stk, bus)
         } else if opcode == 0b11001011 {
             let opcode = self.fetch(bus);

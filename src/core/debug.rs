@@ -164,10 +164,10 @@ impl Debug {
             let tgt3 = parse_operand(bytes[0], 3, OperandType::Tgt3);
             format!("rst {:02X}", tgt3 * 8)
         } else if bytes[0] & 0b11001111 == 0b11000001 {
-            let r16stk = decode_r16stk(parse_operand(bytes[0], 3, OperandType::R16stk));
+            let r16stk = decode_r16stk(parse_operand(bytes[0], 4, OperandType::R16stk));
             format!("pop {}", r16stk.to_string())
         } else if bytes[0] & 0b11001111 == 0b11000101 {
-            let r16stk = decode_r16stk(parse_operand(bytes[0], 3, OperandType::R16stk));
+            let r16stk = decode_r16stk(parse_operand(bytes[0], 4, OperandType::R16stk));
             format!("push {}", r16stk.to_string())
         } else if bytes[0] == 0b11001011 {
             if bytes[1] & 0b11111000 == 0b00000000 {

@@ -21,22 +21,25 @@ const FRAME_DURATION: Duration = Duration::from_micros(16740);
 enum CycleState {
     Unpaused,
     Paused,
+    Restarted,
     Step(usize),
 }
 
 fn main() {
     let mut gameboy = Gameboy::new();
 
-    let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
+    // let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
+
+    let cartridge = Cartridge::from_file("./res/rom/blarggtests/cpu_instrs/cpu_instrs.gb").unwrap();
     gameboy.load_cartridge(cartridge);
 
     let mut cycle_state = CycleState::Paused;
 
-    let (opcode_bytes, opcode_address) = gameboy.get_next_opcode();
+    let (next_opcode_bytes, next_opcode_address) = gameboy.get_next_opcode();
     let mut frontend = Frontend::new(
         gameboy.get_pixels(),
-        opcode_bytes,
-        opcode_address,
+        next_opcode_bytes,
+        next_opcode_address,
         &gameboy.get_registers(),
     );
 
@@ -56,6 +59,10 @@ fn main() {
                     } else {
                         cycle_state = CycleState::Paused;
                     }
+                }
+                frontend::Command::Restart => {
+                    gameboy.restart();
+                    cycle_state = CycleState::Restarted;
                 }
                 frontend::Command::Step(s) => match cycle_state {
                     CycleState::Paused => cycle_state = CycleState::Step(s),
@@ -79,10 +86,10 @@ fn main() {
                     cycle_info = Some(gameboy.cycle());
 
                     // if gameboy.get_next_opcode().1 & 0xF000 >= 0x8000 {
-                    if gameboy.get_next_opcode().1 == 0x150 {
-                        cycle_state = CycleState::Paused;
-                        break;
-                    }
+                    // if gameboy.get_next_opcode().1 == 0x1D5 {
+                    //     cycle_state = CycleState::Paused;
+                    //     break;
+                    // }
                 }
 
                 if let Some(cycle_info) = cycle_info {
@@ -99,17 +106,39 @@ fn main() {
                     frame_render_time = Instant::now();
                 }
             }
-            CycleState::Step(ref mut remaining_steps) => {
-                let cycle_info = gameboy.cycle();
+            CycleState::Restarted => {
+                let (next_opcode_bytes, next_opcode_address) = gameboy.get_next_opcode();
+                frontend.initialise(
+                    gameboy.get_pixels(),
+                    next_opcode_bytes,
+                    next_opcode_address,
+                    &gameboy.get_registers(),
+                );
 
-                *remaining_steps -= 1;
+                cycle_state = CycleState::Paused;
+            }
+            CycleState::Step(ref mut remaining_steps) => {
+                let mut cycle_info: Option<CycleInfo> = None;
+
+                while *remaining_steps > 0 && (!gameboy.frame_ready() || frame_rendered) {
+                    if !gameboy.frame_ready() && frame_rendered {
+                        frame_rendered = false;
+                    }
+
+                    cycle_info = Some(gameboy.cycle());
+                    *remaining_steps -= 1;
+                }
+
+                if let Some(cycle_info) = cycle_info {
+                    frontend.trace_cycle_info(cycle_info);
+                    frontend.set_pixels(gameboy.get_pixels());
+
+                    frame_rendered = true;
+                }
 
                 if *remaining_steps == 0 {
                     cycle_state = CycleState::Paused;
                 }
-
-                frontend.trace_cycle_info(cycle_info);
-                frontend.set_pixels(gameboy.get_pixels());
             }
             _ => (),
         }

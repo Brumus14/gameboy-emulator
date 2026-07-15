@@ -37,7 +37,8 @@ impl Timer {
         }
     }
 
-    pub fn cycle(&mut self) {
+    // Return true if should timer interrupt
+    pub fn cycle(&mut self) -> bool {
         self.tick_count += 1;
 
         if self.tick_count % 256 == 0 {
@@ -56,10 +57,12 @@ impl Timer {
         if enabled && self.tick_count % frequency == 0 {
             if self.tima == 0xFF {
                 self.tima = self.tma;
-                // TODO: interrupt
+                return true;
             } else {
                 self.tima += 1;
             }
         }
+
+        false
     }
 }
