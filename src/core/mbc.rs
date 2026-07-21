@@ -11,7 +11,7 @@ pub struct Mbc1 {
 }
 
 impl Mbc1 {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             ram_enabled: false,
             rom_bank_number: 0,
@@ -27,7 +27,7 @@ impl Mbc for Mbc1 {
             0x0000..0x4000 => rom[address as usize],
             0x4000..0x8000 => {
                 let bank_number = self.rom_bank_number.min(1);
-                rom[(bank_number as u16 * 0x4000 + address) as usize]
+                rom[((bank_number as u16) * 0x4000 + address) as usize]
             }
             0xA000..0xC000 => {
                 if self.ram_enabled

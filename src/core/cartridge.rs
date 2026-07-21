@@ -1,6 +1,6 @@
 use std::{fs, io};
 
-use crate::core::mbc::Mbc;
+use crate::core::mbc::{Mbc, Mbc1};
 
 pub struct Cartridge {
     pub rom: Vec<u8>,
@@ -12,10 +12,15 @@ impl Cartridge {
     pub fn from_file(file_path: &str) -> io::Result<Self> {
         let rom = fs::read(file_path)?;
 
+        let mbc: Option<Box<dyn Mbc>> = match rom[0x147] {
+            0x01 => Some(Box::new(Mbc1::new())),
+            _ => None,
+        };
+
         Ok(Self {
             rom,
             ram: None,
-            mbc: None,
+            mbc,
         })
     }
 

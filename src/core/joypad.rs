@@ -1,5 +1,4 @@
-pub struct Joypad {
-    register: u8,
+pub struct JoypadState {
     pub start: bool,
     pub select: bool,
     pub b: bool,
@@ -10,46 +9,51 @@ pub struct Joypad {
     pub right: bool,
 }
 
+pub struct Joypad {
+    register: u8,
+    pub state: JoypadState,
+}
+
 impl Joypad {
     pub fn new() -> Self {
         Self {
             register: 0,
-            start: false,
-            select: false,
-            b: false,
-            a: false,
-            down: false,
-            up: false,
-            left: false,
-            right: false,
+            state: JoypadState {
+                start: false,
+                select: false,
+                b: false,
+                a: false,
+                down: false,
+                up: false,
+                left: false,
+                right: false,
+            },
         }
     }
-
-    pub fn cycle(&mut self) {}
 
     pub fn read(&self) -> u8 {
         let mut value: u8 = 0;
 
         if (self.register >> 4) & 1 == 0 {
-            if self.right {
+            if self.state.right {
                 value &= !(1);
             } else {
                 value |= 1;
             }
 
-            if self.left {
+            if self.state.left {
                 value &= !(1 << 1);
             } else {
                 value |= 1 << 1;
             }
 
-            if self.up {
+            if self.state.up {
                 value &= !(1 << 2);
             } else {
                 value |= 1 << 2;
             }
 
-            if self.down {
+            if self.state.down {
                 value &= !(1 << 3);
             } else {
                 value |= 1 << 3;
@@ -57,25 +61,25 @@ impl Joypad {
         }
 
         if (self.register >> 5) & 1 == 0 {
-            if self.a {
+            if self.state.a {
                 value &= !(1);
             } else {
                 value |= 1;
             }
 
-            if self.b {
+            if self.state.b {
                 value &= !(1 << 1);
             } else {
                 value |= 1 << 1;
             }
 
-            if self.select {
+            if self.state.select {
                 value &= !(1 << 2);
             } else {
                 value |= 1 << 2;
             }
 
-            if self.start {
+            if self.state.start {
                 value &= !(1 << 3);
             } else {
                 value |= 1 << 3;

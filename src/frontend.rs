@@ -8,6 +8,7 @@ use raylib::{
 use crate::core::{
     debug::Debug,
     gameboy::CycleInfo,
+    joypad::JoypadState,
     registers::{Flag, Registers},
 };
 
@@ -19,6 +20,7 @@ pub enum Command {
     TogglePause,
     Restart,
     Step(usize),
+    UpdateJoypad(JoypadState),
 }
 
 pub struct Frontend {
@@ -241,6 +243,17 @@ impl Frontend {
 
     pub fn update(&mut self) -> Vec<Command> {
         let mut commands = Vec::new();
+
+        commands.push(Command::UpdateJoypad(JoypadState {
+            start: self.raylib.is_key_down(KeyboardKey::KEY_SPACE),
+            select: self.raylib.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
+            b: self.raylib.is_key_down(KeyboardKey::KEY_K),
+            a: self.raylib.is_key_down(KeyboardKey::KEY_J),
+            down: self.raylib.is_key_down(KeyboardKey::KEY_S),
+            up: self.raylib.is_key_down(KeyboardKey::KEY_W),
+            left: self.raylib.is_key_down(KeyboardKey::KEY_A),
+            right: self.raylib.is_key_down(KeyboardKey::KEY_D),
+        }));
 
         let mouse_left_down = self
             .raylib

@@ -1,0 +1,7 @@
+Implement more MBCs
+Hardcode boot procedure so don't have to use boot rom
+Implement joypad input
+Serial data transfer?
+Add other graphics layers
+Implement audio
+Check all interrupts are correct

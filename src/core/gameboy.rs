@@ -4,6 +4,7 @@ use crate::core::{
     bus::Bus,
     cartridge::Cartridge,
     cpu::{self, Cpu},
+    joypad::JoypadState,
     registers::Registers,
 };
 
@@ -81,6 +82,10 @@ impl Gameboy {
 
     pub fn frame_ready(&self) -> bool {
         self.bus.graphics.get_mode() == 1
+    }
+
+    pub fn update_joypad_state(&mut self, state: JoypadState) {
+        self.bus.joypad.state = state;
     }
 }
 

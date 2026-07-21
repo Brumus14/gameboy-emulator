@@ -25,14 +25,12 @@ enum CycleState {
     Step(usize),
 }
 
-// 2
-
 fn main() {
     let mut gameboy = Gameboy::new();
 
-    // let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
-    let cartridge =
-        Cartridge::from_file("./res/rom/blarggtests/interrupt_time/interrupt_time.gb").unwrap();
+    let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
+    // let cartridge =
+    //     Cartridge::from_file("./res/rom/blarggtests/interrupt_time/interrupt_time.gb").unwrap();
     gameboy.load_cartridge(cartridge);
 
     let mut cycle_state = CycleState::Paused;
@@ -53,6 +51,9 @@ fn main() {
 
         for command in commands {
             match command {
+                frontend::Command::UpdateJoypad(state) => {
+                    gameboy.update_joypad_state(state);
+                }
                 frontend::Command::Pause => cycle_state = CycleState::Paused,
                 frontend::Command::Unpause => cycle_state = CycleState::Unpaused,
                 frontend::Command::TogglePause => {

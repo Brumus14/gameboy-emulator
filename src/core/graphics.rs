@@ -51,6 +51,7 @@ impl Graphics {
             0xFF43 => self.scx,
             0xFF44 => self.ly,
             0xFF45 => self.lyc,
+            0xFF46 => 0, // TODO: Implement
             0xFF47 => self.bgp,
             0xFF48 => self.obp0,
             0xFF49 => self.obp1,

@@ -1,8 +1,13 @@
 use std::fs;
 
 use crate::core::{
-    audio::Apu, cartridge::Cartridge, graphics::Graphics, interrupts::Interrupts, joypad::Joypad,
-    serial::Serial, timer::Timer,
+    audio::Apu,
+    cartridge::Cartridge,
+    graphics::Graphics,
+    interrupts::Interrupts,
+    joypad::{Joypad, JoypadState},
+    serial::Serial,
+    timer::Timer,
 };
 
 #[derive(Debug)]
@@ -123,7 +128,7 @@ impl Bus {
             0xFF10..=0xFF3F => self.audio.read(address),
             0xFF40..=0xFF4B => self.graphics.read(address),
             // 0xFF50 => ,
-            0xFF70..=0xFFFF => unreachable!(),
+            0xFF80..=0xFFFF => unreachable!(),
             _ => 0,
         }
     }
