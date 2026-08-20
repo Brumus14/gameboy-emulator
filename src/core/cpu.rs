@@ -59,10 +59,12 @@ impl Cpu {
     }
 
     fn handle_interrupts(&mut self, bus: &mut Bus) -> u8 {
-        if ((bus.graphics.stat >> 3) & 1 == 1 && (bus.graphics.stat & 0b00000011) == 0b00000000)
-            || ((bus.graphics.stat >> 4) & 1 == 1 && (bus.graphics.stat & 0b00000011) == 0b00000001)
-            || ((bus.graphics.stat >> 5) & 1 == 1 && (bus.graphics.stat & 0b00000011) == 0b00000010)
-            || ((bus.graphics.stat >> 6) & 1 == 1 && (bus.graphics.stat >> 2) & 1 == 1)
+        if ((bus.graphics.stat() >> 3) & 1 == 1 && (bus.graphics.stat() & 0b00000011) == 0b00000000)
+            || ((bus.graphics.stat() >> 4) & 1 == 1
+                && (bus.graphics.stat() & 0b00000011) == 0b00000001)
+            || ((bus.graphics.stat() >> 5) & 1 == 1
+                && (bus.graphics.stat() & 0b00000011) == 0b00000010)
+            || ((bus.graphics.stat() >> 6) & 1 == 1 && (bus.graphics.stat() >> 2) & 1 == 1)
         {
             bus.interrupts.flag |= 1 << 1;
         }

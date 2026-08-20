@@ -28,7 +28,7 @@ enum CycleState {
 fn main() {
     let mut gameboy = Gameboy::new();
 
-    let cartridge = Cartridge::from_file("./res/rom/Tetris.gb").unwrap();
+    let cartridge = Cartridge::from_file("./res/rom/KirbysDreamLand.gb").unwrap();
     // let cartridge =
     //     Cartridge::from_file("./res/rom/blarggtests/interrupt_time/interrupt_time.gb").unwrap();
     gameboy.load_cartridge(cartridge);
@@ -88,8 +88,8 @@ fn main() {
 
                     cycle_info = Some(gameboy.cycle());
 
-                    let opcode = gameboy.get_next_opcode();
-
+                    // let opcode = gameboy.get_next_opcode();
+                    //
                     // if gameboy.get_next_opcode().1 & 0xF000 >= 0x8000 {
                     // if opcode.1 == 0xCE65 {
                     // if gameboy.get_next_opcode().0[0] == 0b00000001

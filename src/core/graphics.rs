@@ -1,12 +1,10 @@
-use std::time::Instant;
-
 pub struct Graphics {
     dot_count: u16,
     pixels: [u8; 144 * 160],
     video_ram: [u8; 8192],
     object_attribute_memory: [u8; 160],
     lcdc: u8,
-    pub stat: u8,
+    stat: u8,
     scy: u8,
     scx: u8,
     ly: u8,
@@ -16,7 +14,16 @@ pub struct Graphics {
     obp1: u8,
     wy: u8,
     wx: u8,
+
     x: u8,
+    y_condition: bool,
+    counter: u8,
+    window_active: bool,
+    window_row: u8,
+
+    penalty: u16,
+
+    overlapping_object_indexes: Vec<u8>,
 }
 
 impl Graphics {
@@ -37,14 +44,35 @@ impl Graphics {
             obp1: 0,
             wy: 0,
             wx: 0,
+
             x: 0,
+            y_condition: false,
+            counter: 0,
+            window_active: false,
+            window_row: 0,
+
+            penalty: 0,
+
+            overlapping_object_indexes: Vec::new(),
         }
     }
 
     pub fn read(&self, address: u16) -> u8 {
         match address {
-            0x8000..0xA000 => self.video_ram[(address - 0x8000) as usize],
-            0xFE00..0xFEA0 => self.object_attribute_memory[(address - 0xFE00) as usize],
+            0x8000..0xA000 => {
+                // if self.get_mode() != 3 {
+                self.video_ram[(address - 0x8000) as usize]
+                // } else {
+                //     0xFF
+                // }
+            }
+            0xFE00..0xFEA0 => {
+                // if self.get_mode() != 2 && self.get_mode() != 3 {
+                self.object_attribute_memory[(address - 0xFE00) as usize]
+                // } else {
+                //     0xFF
+                // }
+            }
             0xFF40 => self.lcdc,
             0xFF41 => self.stat,
             0xFF42 => self.scy,
@@ -63,8 +91,16 @@ impl Graphics {
 
     pub fn write(&mut self, address: u16, value: u8) {
         match address {
-            0x8000..0xA000 => self.video_ram[(address - 0x8000) as usize] = value,
-            0xFE00..0xFEA0 => self.object_attribute_memory[(address - 0xFE00) as usize] = value,
+            0x8000..0xA000 => {
+                // if self.get_mode() != 3 {
+                self.video_ram[(address - 0x8000) as usize] = value
+                // }
+            }
+            0xFE00..0xFEA0 => {
+                // if self.get_mode() != 2 && self.get_mode() != 3 {
+                self.object_attribute_memory[(address - 0xFE00) as usize] = value
+                // }
+            }
             0xFF40 => self.lcdc = value,
             0xFF41 => self.stat = value & 0b11111100,
             0xFF42 => self.scy = value,
@@ -89,6 +125,11 @@ impl Graphics {
     }
 
     fn draw_pixel(&mut self) {
+        if self.counter == self.wx && (self.lcdc >> 5) & 1 == 1 {
+            self.window_row += 1;
+            self.window_active = true;
+        }
+
         if self.lcdc & 1 == 0 {
             self.pixels[((self.x as u16) + (self.ly as u16) * 160) as usize] = 0;
             return;
@@ -100,41 +141,114 @@ impl Graphics {
         let tile_x = self.x.wrapping_add(self.scx) / 8;
         let tile_column = self.x.wrapping_add(self.scx) % 8;
 
-        let bg_address = if (self.lcdc >> 3) & 1 == 1 {
-            0x9C00
+        let tile_map_address_offset = if !self.window_active {
+            if (self.lcdc >> 3) & 1 == 1 {
+                0x1C00
+            } else {
+                0x1800
+            }
         } else {
-            0x9800
+            if (self.lcdc >> 6) & 1 == 1 {
+                0x1C00
+            } else {
+                0x1800
+            }
         };
 
-        let index = self.read(bg_address + (tile_x as u16) + (tile_y as u16) * 32);
+        let tile_index = self.video_ram
+            [(tile_map_address_offset + (tile_x as u16) + (tile_y as u16) * 32) as usize];
 
-        let tile_address = if (self.lcdc >> 4) & 1 == 1 {
-            0x8000 + (index as u16) * 16
+        let tile_address_offset = if (self.lcdc >> 4) & 1 == 1 {
+            (tile_index as u16) * 16
         } else {
-            0x9000u16.wrapping_add_signed((index as i8 as i16) * 16)
+            0x1000u16.wrapping_add_signed((tile_index as i8 as i16) * 16)
         };
-        let tile_row_address = tile_address + (tile_row as u16) * 2;
 
-        let low = (self.read(tile_row_address) >> (8 - tile_column - 1)) & 1;
-        let high = (self.read(tile_row_address + 1) >> (8 - tile_column - 1)) & 1;
+        let tile_row_address_offset = tile_address_offset + (tile_row as u16) * 2;
+
+        let low = (self.video_ram[tile_row_address_offset as usize] >> (8 - tile_column - 1)) & 1;
+        let high =
+            (self.video_ram[(tile_row_address_offset + 1) as usize] >> (8 - tile_column - 1)) & 1;
         let palette_index = (high << 1) | low;
 
-        let value = (self.read(0xFF47) >> (palette_index * 2)) & 0b11;
+        let mut value = (self.bgp >> (palette_index * 2)) & 0b11;
+
+        for index in &self.overlapping_object_indexes {
+            let x = self.object_attribute_memory[(*index as usize) * 4 + 1];
+
+            if self.x + 8 >= x && self.x < x {
+                let y = self.object_attribute_memory[(*index as usize) * 4];
+                let tile_index = self.object_attribute_memory[(*index as usize) * 4 + 2];
+                let flags = self.object_attribute_memory[(*index as usize) * 4 + 3];
+
+                let tile_address_offset = (tile_index as u16) * 16;
+
+                let tile_row = if (flags >> 6) & 1 == 1 {
+                    7 - ((self.ly + 16 - y) % 8)
+                } else {
+                    (self.ly + 16 - y) % 8
+                };
+
+                let tile_column = if (flags >> 5) & 1 == 1 {
+                    7 - ((self.x + 8 - x) % 8)
+                } else {
+                    (self.x + 8 - x) % 8
+                };
+
+                let tile_row_address_offset = tile_address_offset + (tile_row as u16) * 2;
+
+                let low =
+                    (self.video_ram[tile_row_address_offset as usize] >> (8 - tile_column - 1)) & 1;
+                let high = (self.video_ram[(tile_row_address_offset + 1) as usize]
+                    >> (8 - tile_column - 1))
+                    & 1;
+                let object_value = (high << 1) | low;
+
+                if object_value != 0 {
+                    value = object_value;
+                }
+            }
+        }
 
         self.pixels[((self.x as u16) + (self.ly as u16) * 160) as usize] = value;
     }
 
-    // Return true if should timer interrupt
+    // Return true if should vblank interrupt
     pub fn cycle(&mut self) -> bool {
         let mut interrupt = false;
-        let scroll_penalty = (self.scx % 8) as u16;
+
+        if self.dot_count == 0 {
+            self.counter = 0;
+
+            if self.wy == self.ly {
+                self.y_condition = true;
+            }
+
+            self.window_active = false;
+        }
 
         if self.ly < 144 {
             if self.dot_count == 0 {
                 self.set_mode(2);
+                self.penalty = 0;
+
+                let object_pixel_height = if (self.lcdc >> 2) & 1 == 1 { 16 } else { 8 };
+                self.overlapping_object_indexes.clear();
+
+                for i in 0..40 {
+                    let y = self.object_attribute_memory[i * 4];
+
+                    if self.ly + 16 >= y && self.ly + 16 < y + object_pixel_height {
+                        self.overlapping_object_indexes.push(i as u8);
+                    }
+                }
             } else if self.dot_count == 80 {
+                self.counter += 7;
                 self.set_mode(3);
-            } else if self.dot_count >= 92 + scroll_penalty && self.get_mode() != 0 {
+                self.penalty += 12 + (self.scx % 8) as u16;
+            }
+
+            if self.get_mode() == 3 && self.penalty == 0 {
                 self.draw_pixel();
 
                 if self.x == 159 {
@@ -145,9 +259,14 @@ impl Graphics {
             }
         } else if self.ly == 144 && self.dot_count == 0 {
             self.set_mode(1);
+            self.y_condition = false;
         }
 
         self.dot_count += 1;
+
+        if self.penalty > 0 {
+            self.penalty -= 1;
+        }
 
         if self.dot_count == 456 {
             self.dot_count -= 456;
@@ -170,5 +289,13 @@ impl Graphics {
 
     pub fn pixels(&self) -> [u8; 144 * 160] {
         self.pixels
+    }
+
+    pub fn stat(&self) -> u8 {
+        self.stat
+    }
+
+    pub fn lcdc(&self) -> u8 {
+        self.lcdc
     }
 }

@@ -55,7 +55,7 @@ pub struct Frontend {
 
 impl Frontend {
     pub fn new(
-        pixels: [u8; 144 * 160],
+        pixels: Option<[u8; 144 * 160]>,
         next_opcode_bytes: [u8; 3],
         next_opcode_address: u16,
         registers: &Registers,
@@ -122,7 +122,7 @@ impl Frontend {
 
     pub fn initialise(
         &mut self,
-        pixels: [u8; 144 * 160],
+        pixels: Option<[u8; 144 * 160]>,
         next_opcode_bytes: [u8; 3],
         next_opcode_address: u16,
         registers: &Registers,
@@ -194,15 +194,19 @@ impl Frontend {
         self.next_opcode = format!("{:04X}: {}", next_opcode_address, next_opcode);
     }
 
-    pub fn set_pixels(&mut self, pixels: [u8; 144 * 160]) {
+    pub fn set_pixels(&mut self, pixels: Option<[u8; 144 * 160]>) {
         for y in 0..144 {
             for x in 0..160 {
-                let colour = match pixels[x + y * 160] {
-                    0 => 255,
-                    1 => 170,
-                    2 => 85,
-                    3 => 0,
-                    _ => unreachable!(),
+                let colour = if let Some(pixels) = pixels {
+                    match pixels[x + y * 160] {
+                        0 => 240,
+                        1 => 170,
+                        2 => 85,
+                        3 => 16,
+                        _ => unreachable!(),
+                    }
+                } else {
+                    255
                 };
 
                 self.framebuffer[y * 160 + x] = colour;
@@ -247,8 +251,8 @@ impl Frontend {
         commands.push(Command::UpdateJoypad(JoypadState {
             start: self.raylib.is_key_down(KeyboardKey::KEY_SPACE),
             select: self.raylib.is_key_down(KeyboardKey::KEY_LEFT_SHIFT),
-            b: self.raylib.is_key_down(KeyboardKey::KEY_K),
-            a: self.raylib.is_key_down(KeyboardKey::KEY_J),
+            b: self.raylib.is_key_down(KeyboardKey::KEY_J),
+            a: self.raylib.is_key_down(KeyboardKey::KEY_K),
             down: self.raylib.is_key_down(KeyboardKey::KEY_S),
             up: self.raylib.is_key_down(KeyboardKey::KEY_W),
             left: self.raylib.is_key_down(KeyboardKey::KEY_A),

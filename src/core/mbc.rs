@@ -1,6 +1,6 @@
 pub trait Mbc {
-    fn read(&mut self, rom: &Vec<u8>, ram: &Option<Vec<u8>>, address: u16) -> u8;
-    fn write(&mut self, rom: &Vec<u8>, ram: &mut Option<Vec<u8>>, address: u16, value: u8);
+    fn read(&mut self, rom: &Vec<u8>, ram: &Vec<u8>, address: u16) -> u8;
+    fn write(&mut self, rom: &Vec<u8>, ram: &mut Vec<u8>, address: u16, value: u8);
 }
 
 pub struct Mbc1 {
@@ -22,7 +22,7 @@ impl Mbc1 {
 }
 
 impl Mbc for Mbc1 {
-    fn read(&mut self, rom: &Vec<u8>, ram: &Option<Vec<u8>>, address: u16) -> u8 {
+    fn read(&mut self, rom: &Vec<u8>, ram: &Vec<u8>, address: u16) -> u8 {
         match address {
             0x0000..0x4000 => rom[address as usize],
             0x4000..0x8000 => {
@@ -30,10 +30,8 @@ impl Mbc for Mbc1 {
                 rom[((bank_number as u16) * 0x4000 + address) as usize]
             }
             0xA000..0xC000 => {
-                if self.ram_enabled
-                    && let Some(ram) = ram
-                {
-                    ram[(address - 0xA000) as usize]
+                if self.ram_enabled {
+                    *ram.get((address - 0xA000) as usize).unwrap_or(&0)
                 } else {
                     0 // maybe not?
                 }
@@ -42,7 +40,7 @@ impl Mbc for Mbc1 {
         }
     }
 
-    fn write(&mut self, rom: &Vec<u8>, ram: &mut Option<Vec<u8>>, address: u16, value: u8) {
+    fn write(&mut self, rom: &Vec<u8>, ram: &mut Vec<u8>, address: u16, value: u8) {
         match address {
             0x0000..0x2000 => {
                 if value & 0xF == 0xA {
@@ -62,9 +60,9 @@ impl Mbc for Mbc1 {
             }
             0xA000..0xC000 => {
                 if self.ram_enabled
-                    && let Some(ram) = ram
+                    && let Some(v) = ram.get_mut((address - 0xA000) as usize)
                 {
-                    ram[(address - 0xA000) as usize] = value;
+                    *v = value;
                 }
             }
             _ => unreachable!(),

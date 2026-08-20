@@ -1,4 +1,4 @@
-use std::{fs, thread::sleep, time::Duration};
+use std::time::Instant;
 
 use crate::core::{
     bus::Bus,
@@ -11,6 +11,7 @@ use crate::core::{
 pub struct Gameboy {
     cpu: Cpu,
     bus: Bus,
+    lcd_enabled: bool,
     cycle_count: u64,
 }
 
@@ -19,6 +20,7 @@ impl Gameboy {
         Self {
             cpu: Cpu::new(),
             bus: Bus::new(),
+            lcd_enabled: true,
             cycle_count: 0,
         }
     }
@@ -28,6 +30,7 @@ impl Gameboy {
 
         self.cpu = Cpu::new();
         self.bus = Bus::new();
+        self.lcd_enabled = true;
         self.cycle_count = 0;
 
         self.bus.cartridge = cartridge;
@@ -65,11 +68,17 @@ impl Gameboy {
             }
         }
 
+        self.lcd_enabled = self.bus.graphics.lcdc() >> 7 == 1;
+
         CycleInfo { cpu_cycle_info }
     }
 
-    pub fn get_pixels(&self) -> [u8; 144 * 160] {
-        self.bus.graphics.pixels()
+    pub fn get_pixels(&self) -> Option<[u8; 144 * 160]> {
+        if self.lcd_enabled {
+            Some(self.bus.graphics.pixels())
+        } else {
+            None
+        }
     }
 
     pub fn get_registers(&self) -> Registers {
