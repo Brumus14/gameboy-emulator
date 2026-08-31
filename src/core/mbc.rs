@@ -26,7 +26,7 @@ impl Mbc for Mbc1 {
         match address {
             0x0000..0x4000 => rom[address as usize],
             0x4000..0x8000 => {
-                let bank_number = self.rom_bank_number.min(1);
+                let bank_number = self.rom_bank_number.max(1);
                 rom[((bank_number as u16) * 0x4000 + address) as usize]
             }
             0xA000..0xC000 => {

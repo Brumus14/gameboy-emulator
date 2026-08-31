@@ -24,13 +24,14 @@ pub enum Command {
 }
 
 pub struct Frontend {
-    raylib: RaylibHandle,
-    thread: RaylibThread,
     font: Font,
     font_width: f32,
     font_height: f32,
     framebuffer_texture: Texture2D,
     framebuffer: [u8; 144 * 160],
+
+    raylib: RaylibHandle,
+    thread: RaylibThread,
 
     mouse_left_down: bool,
 
@@ -127,19 +128,11 @@ impl Frontend {
         next_opcode_address: u16,
         registers: &Registers,
     ) {
-        let framebuffer_image = unsafe {
-            let mut raw = GenImageColor(160, 144, Color::BLACK);
-            raw.format = PixelFormat::PIXELFORMAT_UNCOMPRESSED_GRAYSCALE as i32;
-            Image::from_raw(raw)
-        };
-
-        let framebuffer = self
-            .raylib
-            .load_texture_from_image(&self.thread, &framebuffer_image)
-            .unwrap();
-
-        self.framebuffer_texture = framebuffer;
         self.framebuffer = [0; 144 * 160];
+
+        self.framebuffer_texture
+            .update_texture(&self.framebuffer)
+            .unwrap();
 
         self.mouse_left_down = false;
 
@@ -195,22 +188,18 @@ impl Frontend {
     }
 
     pub fn set_pixels(&mut self, pixels: Option<[u8; 144 * 160]>) {
-        for y in 0..144 {
-            for x in 0..160 {
-                let colour = if let Some(pixels) = pixels {
-                    match pixels[x + y * 160] {
-                        0 => 240,
-                        1 => 170,
-                        2 => 85,
-                        3 => 16,
-                        _ => unreachable!(),
-                    }
-                } else {
-                    255
-                };
-
-                self.framebuffer[y * 160 + x] = colour;
+        if let Some(pixels) = pixels {
+            for i in 0..(144 * 160) {
+                self.framebuffer[i] = match pixels[i] {
+                    0 => 240,
+                    1 => 170,
+                    2 => 85,
+                    3 => 16,
+                    _ => unreachable!(),
+                }
             }
+        } else {
+            self.framebuffer.fill(255);
         }
 
         self.framebuffer_texture

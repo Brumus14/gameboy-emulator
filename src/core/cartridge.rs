@@ -3,6 +3,8 @@ use std::{fs, io};
 use crate::core::mbc::{Mbc, Mbc1};
 
 pub struct Cartridge {
+    pub title: String,
+    pub 
     pub rom: Vec<u8>,
     ram: Vec<u8>,
     mbc: Option<Box<dyn Mbc>>,
@@ -20,7 +22,7 @@ impl Cartridge {
             _ => unreachable!(),
         };
 
-        println!("{}", rom[0x0149]);
+        println!("{}", rom[0x0147]);
         let ram_bank_count = if has_ram {
             match rom[0x0149] {
                 0x00 => 0,

@@ -1,3 +1,4 @@
+Pretty sure MBC1 is broken
 Implement more MBCs
 Hardcode boot procedure so don't have to use boot rom
 Implement joypad input

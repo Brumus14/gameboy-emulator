@@ -5,3 +5,9 @@ edition = "2024"
 
 [dependencies]
 raylib = "6.0.0"
+
+[profile.release]
+debug = true
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-Clink-arg=-Wl,--no-rosegment"]

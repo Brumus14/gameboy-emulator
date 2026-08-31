@@ -1,0 +1,47 @@
+age-test-roms
+
+blargg
+X   cpu_instrs
+X       01-special
+X       02-interrupts
+X       03-op sp,hl.gb
+X       04-op r,imm.gb
+X       05-op rp.gb
+X       06-ld r,r.gb
+X       07-jr,jp,call,ret,rst.gb
+X       08-misc instrs.gb
+X       09-op r,r.gb
+X       10-bit ops.gb
+X       11-op a,(hl).gb
+
+bully
+
+cgb-acid-hell
+
+cgb-acid2
+
+dmg-acid2
+
+gambatte
+
+gbmicrotest
+
+little-things-gb
+
+mbc3-tester
+
+mealybug-tearoom-tests
+
+mooneye-test-suite
+
+mooneye-test-suite-wilbertpol
+
+rtc3test
+
+same-suite
+
+scribbltests
+
+strikethrough
+
+turtle-tests
