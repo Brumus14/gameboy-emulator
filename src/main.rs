@@ -29,8 +29,15 @@ fn main() {
     let mut gameboy = Gameboy::new();
 
     // let cartridge = Cartridge::from_file("./res/rom/Alleyway.gb").unwrap();
-    let cartridge =
-        Cartridge::from_file("./res/rom/tests/blargg/instr_timing/instr_timing.gb").unwrap();
+
+    let cartridge = Cartridge::from_file(
+        "./res/rom/tests/blargg/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb",
+    )
+    .unwrap();
+    // println!(
+    //     "{}, {}, {}",
+    //     cartridge.type_code, cartridge.rom_size_code, cartridge.ram_size_code
+    // );
     gameboy.load_cartridge(cartridge);
 
     let mut cycle_state = CycleState::Paused;

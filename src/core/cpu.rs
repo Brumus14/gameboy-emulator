@@ -24,8 +24,14 @@ pub struct CycleInfo {
     pub registers: Registers,
 }
 
+pub enum CpuState {
+    Fetching,
+    Executing([u8; 3], u8),
+    Halted,
+}
+
 pub struct Cpu {
-    halted: bool,
+    state: CpuState,
     registers: Registers,
     interrupt_master_enable: bool,
     interrupt_master_enable_pending: bool,
@@ -36,7 +42,7 @@ pub struct Cpu {
 impl Cpu {
     pub fn new() -> Self {
         Self {
-            halted: false,
+            state: CpuState::Fetching,
             registers: Registers::new(),
             interrupt_master_enable: false,
             interrupt_master_enable_pending: false,
@@ -127,12 +133,12 @@ impl Cpu {
 
     // TODO: Rename from cycle as can be over multiple clock cycles
     pub fn cycle(&mut self, bus: &mut Bus) -> Option<CycleInfo> {
-        if self.halted {
+        if let CpuState::Halted = self.state {
             if bus.interrupts.enable & bus.interrupts.flag & 0b00011111 != 0 {
-                self.halted = false;
-            } else {
-                return None;
+                self.state = CpuState::Fetching;
             }
+
+            return None;
         }
 
         let (opcode_bytes, opcode_address) = self.get_next_opcode(bus);
@@ -669,7 +675,7 @@ impl Cpu {
     }
 
     fn halt(&mut self) -> u8 {
-        self.halted = true;
+        self.state = CpuState::Halted;
         0
     }
 

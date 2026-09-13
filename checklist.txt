@@ -1,7 +1,18 @@
 age-test-roms
+    halt
+    ly
+0   m3-bg-bgp
+0   m3-bg-lcdc
+0   m3-bg-scx
+0   oam
+    stat-interrupt
+    stat-mode
+    stat-mode-sprites
+    stat-mode-window
+0   vram
 
 blargg
-X   cpu_instrs
+0   cpu_instrs
 X       01-special
 X       02-interrupts
 X       03-op sp,hl.gb
@@ -13,6 +24,12 @@ X       08-misc instrs.gb
 X       09-op r,r.gb
 X       10-bit ops.gb
 X       11-op a,(hl).gb
+X   instr_timing
+0   mem_timing
+0   mem_timing-2
+0   interrupt_time
+0   oam_bug
+0   dmg_sound
 
 bully
 
@@ -20,7 +37,7 @@ cgb-acid-hell
 
 cgb-acid2
 
-dmg-acid2
+0   dmg-acid2
 
 gambatte
 
