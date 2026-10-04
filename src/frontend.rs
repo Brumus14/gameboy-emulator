@@ -63,7 +63,7 @@ impl Frontend {
     ) -> Self {
         let (mut raylib, thread) = raylib::init()
             .size(1280, 720)
-            .log_level(TraceLogLevel::LOG_NONE)
+            .log_level(TraceLogLevel::LOG_ALL)
             .title("Gameboy!")
             .build();
 

@@ -22,10 +22,10 @@ pub enum Register16 {
 
 #[derive(Clone, Copy)]
 pub enum Flag {
-    Zero,
-    Negative,
-    HalfCarry,
-    Carry,
+    Z,
+    N,
+    H,
+    C,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -40,6 +40,9 @@ pub struct Registers {
     pub l: u8,
     pub sp: u16,
     pub pc: u16,
+    pub ir: u8,
+    pub z: u8,
+    pub w: u8,
 }
 
 impl Registers {
@@ -55,6 +58,9 @@ impl Registers {
             l: 0,
             sp: 0,
             pc: 0,
+            ir: 0,
+            z: 0,
+            w: 0,
         }
     }
 
@@ -118,29 +124,38 @@ impl Registers {
         }
     }
 
+    pub fn get_wz(&mut self) -> u16 {
+        ((self.w as u16) << 8) | (self.z as u16)
+    }
+
+    pub fn set_wz(&mut self, value: u16) {
+        self.w = (value >> 8) as u8;
+        self.z = (value & 0xFF) as u8;
+    }
+
     pub fn get_flag(&self, flag: Flag) -> bool {
         match flag {
-            Flag::Zero => self.f & 0b10000000 != 0,
-            Flag::Negative => self.f & 0b01000000 != 0,
-            Flag::HalfCarry => self.f & 0b00100000 != 0,
-            Flag::Carry => self.f & 0b00010000 != 0,
+            Flag::Z => self.f & 0b10000000 != 0,
+            Flag::N => self.f & 0b01000000 != 0,
+            Flag::H => self.f & 0b00100000 != 0,
+            Flag::C => self.f & 0b00010000 != 0,
         }
     }
 
     pub fn set_flag(&mut self, flag: Flag, value: bool) {
         if value {
             match flag {
-                Flag::Zero => self.f |= 0b10000000,
-                Flag::Negative => self.f |= 0b01000000,
-                Flag::HalfCarry => self.f |= 0b00100000,
-                Flag::Carry => self.f |= 0b00010000,
+                Flag::Z => self.f |= 0b10000000,
+                Flag::N => self.f |= 0b01000000,
+                Flag::H => self.f |= 0b00100000,
+                Flag::C => self.f |= 0b00010000,
             }
         } else {
             match flag {
-                Flag::Zero => self.f &= 0b01111111,
-                Flag::Negative => self.f &= 0b10111111,
-                Flag::HalfCarry => self.f &= 0b11011111,
-                Flag::Carry => self.f &= 0b11101111,
+                Flag::Z => self.f &= 0b01111111,
+                Flag::N => self.f &= 0b10111111,
+                Flag::H => self.f &= 0b11011111,
+                Flag::C => self.f &= 0b11101111,
             }
         }
     }

@@ -126,6 +126,7 @@ pub fn parse_operand(opcode: u8, start_bit_index: u8, operand_type: OperandType)
     (opcode >> start_bit_index) & ((1 << operand_size) - 1)
 }
 
+// TODO: Move this to cpu.rs?
 pub fn get_r8(operand: R8, registers: &Registers, bus: &mut Bus) -> u8 {
     match operand {
         R8::B => registers.get_register8(Register8::B),
@@ -208,10 +209,10 @@ pub fn set_r16mem(operand: R16mem, value: u16, registers: &mut Registers) {
 
 pub fn get_cond(cond: Cond, registers: &Registers) -> bool {
     match cond {
-        Cond::NZ => !registers.get_flag(Flag::Zero),
-        Cond::Z => registers.get_flag(Flag::Zero),
-        Cond::NC => !registers.get_flag(Flag::Carry),
-        Cond::C => registers.get_flag(Flag::Carry),
+        Cond::NZ => !registers.get_flag(Flag::Z),
+        Cond::Z => registers.get_flag(Flag::Z),
+        Cond::NC => !registers.get_flag(Flag::C),
+        Cond::C => registers.get_flag(Flag::C),
     }
 }
 
